@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Azure Architect Mastery — APIM, Service Bus, RBAC, Networking, Container Apps & AZ-305</title>
+<style>
+:root{
+  --bg:#0d1117; --panel:#161b27; --panel2:#1c2333; --border:#2a3348;
+  --text:#e6e9f0; --muted:#9aa4b8; --accent:#4da3ff; --accent2:#7ee0c3;
+  --good:#3fb68b; --bad:#e5636c; --warn:#e0b34d; --code:#111726;
+  --shadow:0 6px 24px rgba(0,0,0,.35);
+}
+[data-theme="light"]{
+  --bg:#f4f6fa; --panel:#ffffff; --panel2:#eef2f8; --border:#d7deea;
+  --text:#1c2333; --muted:#5a6478; --accent:#0f6cbd; --accent2:#0a8f6c;
+  --good:#1e8e63; --bad:#c8404a; --warn:#9c7a1f; --code:#f0f3f9;
+  --shadow:0 4px 16px rgba(30,40,80,.08);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;line-height:1.6}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+header{position:sticky;top:0;z-index:50;background:var(--panel);border-bottom:1px solid var(--border);box-shadow:var(--shadow)}
+.hwrap{max-width:1200px;margin:0 auto;padding:10px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.logo{font-weight:700;font-size:1.05rem;white-space:nowrap}
+.logo span{color:var(--accent)}
+nav.tabs{display:flex;gap:4px;flex-wrap:wrap}
+.tabbtn{background:none;border:1px solid transparent;color:var(--muted);padding:7px 14px;border-radius:8px;cursor:pointer;font-size:.92rem;font-family:inherit}
+.tabbtn:hover{color:var(--text);background:var(--panel2)}
+.tabbtn.active{color:#fff;background:var(--accent);border-color:var(--accent)}
+[data-theme="light"] .tabbtn.active{color:#fff}
+#themeBtn{margin-left:auto;background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:8px;cursor:pointer}
+main{max-width:1200px;margin:0 auto;padding:24px 20px 80px}
+.view{display:none}
+.view.active{display:block}
+/* STUDY */
+.studywrap{display:grid;grid-template-columns:250px 1fr;gap:24px}
+aside#toc{position:sticky;top:70px;align-self:start;max-height:calc(100vh - 90px);overflow:auto;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px}
+#toc a{display:block;padding:6px 10px;border-radius:7px;color:var(--muted);font-size:.9rem}
+#toc a:hover{background:var(--panel2);color:var(--text);text-decoration:none}
+#toc a.on{background:var(--panel2);color:var(--accent);font-weight:600}
+article.content{min-width:0;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:28px 32px}
+.content h1{font-size:1.6rem;margin-bottom:10px}
+.content h2{font-size:1.35rem;margin:34px 0 12px;padding-top:18px;border-top:2px solid var(--border);color:var(--accent)}
+.content h2:first-of-type{border-top:none;margin-top:6px;padding-top:0}
+.content h3{font-size:1.08rem;margin:22px 0 8px;color:var(--accent2)}
+.content p{margin:10px 0;color:var(--text)}
+.content ul,.content ol{margin:10px 0 10px 24px}
+.content li{margin:5px 0}
+.content table{border-collapse:collapse;width:100%;margin:14px 0;font-size:.92rem}
+.content th,.content td{border:1px solid var(--border);padding:8px 10px;text-align:left;vertical-align:top}
+.content th{background:var(--panel2)}
+.content code{background:var(--code);border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:.88em;font-family:Consolas,'Courier New',monospace}
+.content pre{background:var(--code);border:1px solid var(--border);border-radius:10px;padding:14px;overflow:auto;margin:14px 0}
+.content pre code{background:none;border:none;padding:0}
+.content strong{color:var(--text)}
+.content hr{border:none;border-top:1px solid var(--border);margin:26px 0}
+/* QUIZ */
+.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:24px;box-shadow:var(--shadow)}
+.controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:18px}
+select,button.btn{background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:.92rem;cursor:pointer;font-family:inherit}
+button.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+button.btn:disabled{opacity:.45;cursor:not-allowed}
+.qmeta{display:flex;justify-content:space-between;color:var(--muted);font-size:.88rem;margin-bottom:10px;flex-wrap:wrap;gap:6px}
+.qtext{font-size:1.08rem;font-weight:600;margin-bottom:16px}
+.opt{display:block;width:100%;text-align:left;background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:10px;padding:12px 14px;margin:8px 0;cursor:pointer;font-size:.95rem;font-family:inherit;transition:border-color .15s}
+.opt:hover:not(:disabled){border-color:var(--accent)}
+.opt.correct{border-color:var(--good);background:color-mix(in srgb,var(--good) 14%,var(--panel2))}
+.opt.wrong{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,var(--panel2))}
+.explain{margin-top:14px;padding:12px 14px;border-left:3px solid var(--accent);background:var(--panel2);border-radius:0 10px 10px 0;font-size:.92rem;display:none}
+.progressbar{height:6px;background:var(--panel2);border-radius:4px;margin-bottom:16px;overflow:hidden}
+.progressbar div{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));width:0%;transition:width .3s}
+.scorebox{text-align:center;padding:30px}
+.scorebox .big{font-size:3rem;font-weight:800;color:var(--accent)}
+.catgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;margin-top:18px;text-align:left}
+.catline{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:.88rem}
+/* FLASHCARDS */
+.fcstage{perspective:1200px;max-width:660px;margin:0 auto}
+.fcard{position:relative;width:100%;min-height:320px;cursor:pointer;transform-style:preserve-3d;transition:transform .5s}
+.fcard.flipped{transform:rotateY(180deg)}
+.face{position:absolute;inset:0;backface-visibility:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:34px;border-radius:16px;border:1px solid var(--border);background:var(--panel);box-shadow:var(--shadow)}
+.face.back{transform:rotateY(180deg);background:var(--panel2)}
+.face .cat{position:absolute;top:14px;left:16px;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.face .hint{position:absolute;bottom:12px;color:var(--muted);font-size:.78rem}
+.face .txt{font-size:1.15rem;font-weight:600}
+.face.back .txt{font-size:1rem;font-weight:400}
+.fcnav{display:flex;gap:10px;justify-content:center;align-items:center;margin-top:18px;flex-wrap:wrap}
+.fccount{color:var(--muted);font-size:.9rem;min-width:90px;text-align:center}
+.knowbtns{display:flex;gap:10px;justify-content:center;margin-top:12px}
+.kb{border-radius:8px;padding:8px 18px;border:1px solid var(--border);cursor:pointer;font-family:inherit;font-size:.9rem}
+.kb.know{background:color-mix(in srgb,var(--good) 18%,var(--panel));color:var(--good);border-color:var(--good)}
+.kb.dontknow{background:color-mix(in srgb,var(--bad) 14%,var(--panel));color:var(--bad);border-color:var(--bad)}
+.fcstats{text-align:center;color:var(--muted);font-size:.85rem;margin-top:10px}
+mark.hl{background:var(--warn);color:#111;border-radius:3px;padding:0 2px}
+.content h2{cursor:pointer;user-select:none}
+.content h2 .caret{color:var(--muted);font-size:.8em}
+.secbody.collapsed{display:none}
+.opt.sel{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--panel2))}
+.ostep{display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin:8px 0;font-size:.93rem}
+.ostep .num{background:var(--accent);color:#fff;border-radius:6px;min-width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700}
+.ostep.ok{border-color:var(--good)} .ostep.ko{border-color:var(--bad)}
+.ostep .omv{padding:4px 10px}
+.dbadge{margin-left:6px}
+.mermaid{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:14px;margin:14px 0;text-align:center;overflow:auto}
+footer{border-top:1px solid var(--border);color:var(--muted);text-align:center;padding:24px;font-size:.85rem}
+@media(max-width:900px){.studywrap{grid-template-columns:1fr}aside#toc{position:static;max-height:none}}
+</style>
+</head>
+<body data-theme="dark">
+<header>
+  <div class="hwrap">
+    <div class="logo">☁️ Azure Architect <span>Mastery</span></div>
+    <nav class="tabs">
+      <button class="tabbtn active" data-view="study">📘 Study Guide</button>
+      <button class="tabbtn" data-view="quiz">✅ Quiz</button>
+      <button class="tabbtn" data-view="cards">🃏 Flashcards</button>
+    </nav>
+    <button id="themeBtn" title="Toggle theme">🌙 / ☀️</button>
+  </div>
+</header>
+<main>
+  <!-- STUDY -->
+  <section id="view-study" class="view active">
+    <div class="card" style="margin-bottom:14px;display:flex;gap:8px;align-items:center;padding:10px 14px">
+      <span>🔎</span>
+      <input id="searchInp" placeholder="Search the study guide… (min 2 chars)" style="flex:1;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-family:inherit">
+      <button class="btn" id="searchPrev" title="Previous match">↑</button>
+      <button class="btn" id="searchNext" title="Next match">↓</button>
+      <span id="searchCnt" style="color:var(--muted);font-size:.85rem;min-width:86px;text-align:right"></span>
+    </div>
+    <div class="studywrap">
+      <aside id="toc"></aside>
+      <article class="content" id="content">__CONTENT__</article>
+    </div>
+  </section>
+
+  <!-- QUIZ -->
+  <section id="view-quiz" class="view">
+    <div class="card">
+      <div class="controls">
+        <label>Category:
+          <select id="quizCat"></select>
+        </label>
+        <label>Questions:
+          <select id="quizLen">
+            <option>10</option><option selected>20</option><option>40</option><option value="all">All</option>
+          </select>
+        </label>
+        <button class="btn primary" id="quizStart">Start quiz</button>
+        <span id="quizBank" style="color:var(--muted);font-size:.85rem"></span>
+      </div>
+      <div id="quizArea"></div>
+    </div>
+  </section>
+
+  <!-- FLASHCARDS -->
+  <section id="view-cards" class="view">
+    <div class="card">
+      <div class="controls">
+        <label>Category:
+          <select id="fcCat"></select>
+        </label>
+        <button class="btn" id="fcShuffle">🔀 Shuffle</button>
+        <button class="btn" id="fcReset">Reset progress</button>
+        <span id="fcBank" style="color:var(--muted);font-size:.85rem"></span>
+      </div>
+      <div class="fcstage">
+        <div class="fcard" id="fcard">
+          <div class="face front"><span class="cat" id="fcCatLbl"></span><div class="txt" id="fcFront"></div><span class="hint">click / space to flip</span></div>
+          <div class="face back"><span class="cat" id="fcCatLbl2"></span><div class="txt" id="fcBack"></div><span class="hint">click / space to flip back</span></div>
+        </div>
+      </div>
+      <div class="fcnav">
+        <button class="btn" id="fcPrev">← Prev</button>
+        <span class="fccount" id="fcCount"></span>
+        <button class="btn" id="fcNext">Next →</button>
+      </div>
+      <div class="knowbtns">
+        <button class="kb know" id="fcKnow">✓ I know this</button>
+        <button class="kb dontknow" id="fcDont">✗ Review again</button>
+      </div>
+      <div class="fcstats" id="fcStats"></div>
+    </div>
+  </section>
+</main>
+<footer>
+  Azure Architect Mastery — APIM · Service Bus · RBAC · Networking · Container Apps · Auth Patterns · AZ-305.
+  Built for self-study; verify details against <a href="https://learn.microsoft.com" target="_blank" rel="noopener">learn.microsoft.com</a>.
+</footer>
+<script>
+const QUIZ = __QUIZ__;
+const CARDS = __CARDS__;
+const CATNAMES = {APIM:"API Management",ServiceBus:"Service Bus",RBAC:"RBAC & Governance",Networking:"Networking",ContainerApps:"Container Apps",Auth:"Auth & Identity",Patterns:"Design Patterns",Exam:"AZ-305 Exam",Data:"Data Storage",BCDR:"Business Continuity",Monitor:"Monitoring",Compute:"Compute",Migration:"Migration & Integration"};
+
+/* ---------- tabs & theme ---------- */
+document.querySelectorAll(".tabbtn").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll(".tabbtn").forEach(x=>x.classList.remove("active"));
+  document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));
+  b.classList.add("active");
+  document.getElementById("view-"+b.dataset.view).classList.add("active");
+  window.scrollTo({top:0});
+}));
+const themeBtn=document.getElementById("themeBtn");
+function setTheme(t){document.body.dataset.theme=t;try{localStorage.setItem("aam-theme",t)}catch(e){}}
+themeBtn.addEventListener("click",()=>setTheme(document.body.dataset.theme==="dark"?"light":"dark"));
+try{const t=localStorage.getItem("aam-theme");if(t)setTheme(t)}catch(e){}
+
+/* ---------- TOC ---------- */
+(function(){
+  const toc=document.getElementById("toc");
+  const content=document.getElementById("content");
+  [...content.querySelectorAll("h2")].forEach((h,i)=>{
+    h.id="sec-"+i;
+    const a=document.createElement("a");a.href="#sec-"+i;a.textContent=h.textContent;toc.appendChild(a);
+    const body=document.createElement("div");body.className="secbody";
+    let n=h.nextSibling;
+    while(n&&!(n.nodeType===1&&n.tagName==="H2")){const nx=n.nextSibling;body.appendChild(n);n=nx}
+    h.parentNode.insertBefore(body,h.nextSibling);
+    const caret=document.createElement("span");caret.className="caret";caret.textContent=" ▾";h.appendChild(caret);
+    h.addEventListener("click",()=>{body.classList.toggle("collapsed");caret.textContent=body.classList.contains("collapsed")?" ▸":" ▾"});
+    a.addEventListener("click",()=>{body.classList.remove("collapsed");caret.textContent=" ▾"});
+  });
+  const links=[...toc.querySelectorAll("a")];
+  window.addEventListener("scroll",()=>{
+    const hs=[...document.querySelectorAll("#content h2")];
+    let cur=0;hs.forEach((h,i)=>{if(h.getBoundingClientRect().top<120)cur=i});
+    links.forEach((l,i)=>l.classList.toggle("on",i===cur));
+  },{passive:true});
+})();
+
+/* ---------- helpers ---------- */
+const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+function fillCats(sel,data){
+  const cats=[...new Set(data.map(x=>x.c))];
+  sel.innerHTML='<option value="all">All categories</option>'+cats.map(c=>`<option value="${c}">${CATNAMES[c]||c}</option>`).join("");
+}
+
+/* ---------- QUIZ ---------- */
+const quizCat=document.getElementById("quizCat"),quizLen=document.getElementById("quizLen"),quizArea=document.getElementById("quizArea");
+fillCats(quizCat,QUIZ);
+document.getElementById("quizBank").textContent=QUIZ.length+" questions in bank";
+let qSet=[],qIdx=0,qScore=0,qWrong=[];
+document.getElementById("quizStart").addEventListener("click",()=>{
+  const cat=quizCat.value;
+  let pool=cat==="all"?QUIZ:QUIZ.filter(q=>q.c===cat);
+  pool=shuffle(pool);
+  const n=quizLen.value==="all"?pool.length:Math.min(parseInt(quizLen.value),pool.length);
+  qSet=pool.slice(0,n);qIdx=0;qScore=0;qWrong=[];
+  renderQ();
+});
+function qHead(q){
+  const db=q.d?(q.d===1?'<span class="dbadge" title="easy">🟢</span>':q.d===2?'<span class="dbadge" title="medium">🟡</span>':'<span class="dbadge" title="hard">🔴</span>'):"";
+  return `<div class="progressbar"><div style="width:${(qIdx/qSet.length)*100}%"></div></div>
+    <div class="qmeta"><span>Question ${qIdx+1} / ${qSet.length} · ${CATNAMES[q.c]||q.c}${db}</span><span>Score: ${qScore}</span></div>
+    <div class="qtext">${q.q}</div>`;
+}
+function qFoot(){return `<div class="explain" id="explain"></div>
+    <div style="margin-top:16px;text-align:right"><button class="btn primary" id="qNext" disabled>Next →</button></div>`}
+function wireNext(){document.getElementById("qNext").addEventListener("click",()=>{qIdx++;renderQ()})}
+function showExplain(right,extra,q){
+  const ex=document.getElementById("explain");
+  ex.innerHTML=(right?"✅ <strong>Correct.</strong> ":"❌ <strong>Not quite.</strong> ")+(extra||"")+q.e;
+  ex.style.display="block";
+  document.getElementById("qNext").disabled=false;
+}
+function renderQ(){
+  if(qIdx>=qSet.length){return renderScore()}
+  const q=qSet[qIdx];
+  if(q.t==="multi")return renderMulti(q);
+  if(q.t==="order")return renderOrder(q);
+  const opts=shuffle(q.o.map((t,i)=>({t,ok:i===q.a})));
+  quizArea.innerHTML=qHead(q)+
+    `<div id="opts">${opts.map((o,i)=>`<button class="opt" data-ok="${o.ok?1:0}">${String.fromCharCode(65+i)}. ${o.t}</button>`).join("")}`+qFoot();
+  const btns=[...quizArea.querySelectorAll(".opt")];
+  btns.forEach(b=>b.addEventListener("click",()=>{
+    btns.forEach(x=>{x.disabled=true;if(x.dataset.ok==="1")x.classList.add("correct")});
+    const right=b.dataset.ok==="1";
+    if(right)qScore++;else{b.classList.add("wrong");qWrong.push(q)}
+    showExplain(right,"",q);
+  }));
+  wireNext();
+}
+function renderMulti(q){
+  const opts=shuffle(q.o.map((t,i)=>({t,i})));
+  quizArea.innerHTML=qHead(q)+
+    `<p style="color:var(--muted);font-size:.85rem;margin-bottom:8px">Multi-select — choose all that apply, then submit.</p>
+     <div id="opts">${opts.map((o,i)=>`<button class="opt" data-i="${o.i}">${String.fromCharCode(65+i)}. ${o.t}</button>`).join("")}</div>
+     <div style="margin-top:12px"><button class="btn primary" id="qSubmit">Submit answer</button></div>`+qFoot();
+  const btns=[...quizArea.querySelectorAll(".opt")];
+  btns.forEach(b=>b.addEventListener("click",()=>{if(!b.disabled)b.classList.toggle("sel")}));
+  document.getElementById("qSubmit").addEventListener("click",()=>{
+    const sel=new Set(btns.filter(b=>b.classList.contains("sel")).map(b=>+b.dataset.i));
+    const ans=new Set(q.a);
+    const right=sel.size===ans.size&&[...sel].every(x=>ans.has(x));
+    btns.forEach(b=>{b.disabled=true;const i=+b.dataset.i;
+      if(ans.has(i))b.classList.add("correct");else if(sel.has(i))b.classList.add("wrong")});
+    document.getElementById("qSubmit").disabled=true;
+    if(right)qScore++;else qWrong.push(q);
+    showExplain(right,"",q);
+  });
+  wireNext();
+}
+function renderOrder(q){
+  let arr=shuffle(q.o.map((t,i)=>({t,i})));
+  if(arr.every((x,k)=>x.i===k))arr=arr.slice().reverse();
+  quizArea.innerHTML=qHead(q)+
+    `<p style="color:var(--muted);font-size:.85rem;margin-bottom:8px">Ordering — arrange the steps with ▲▼, then check.</p>
+     <div id="osteps"></div>
+     <div style="margin-top:12px"><button class="btn primary" id="qCheck">Check order</button></div>`+qFoot();
+  const box=document.getElementById("osteps");
+  function draw(){
+    box.innerHTML=arr.map((s,k)=>`<div class="ostep"><span class="num">${k+1}</span><span style="flex:1">${s.t}</span>
+      <button class="btn omv" data-k="${k}" data-d="-1" ${k===0?"disabled":""}>▲</button>
+      <button class="btn omv" data-k="${k}" data-d="1" ${k===arr.length-1?"disabled":""}>▼</button></div>`).join("");
+    [...box.querySelectorAll(".omv")].forEach(b=>b.addEventListener("click",()=>{
+      const k=+b.dataset.k,d=+b.dataset.d;[arr[k],arr[k+d]]=[arr[k+d],arr[k]];draw();
+    }));
+  }
+  draw();
+  document.getElementById("qCheck").addEventListener("click",()=>{
+    const right=arr.every((x,k)=>x.i===k);
+    [...box.querySelectorAll(".ostep")].forEach((el,k)=>el.classList.add(arr[k].i===k?"ok":"ko"));
+    [...box.querySelectorAll(".omv")].forEach(b=>b.disabled=true);
+    document.getElementById("qCheck").disabled=true;
+    if(right)qScore++;else qWrong.push(q);
+    showExplain(right,right?"":"Correct order:<br>"+q.o.map((s,i)=>(i+1)+". "+s).join("<br>")+"<br><br>",q);
+  });
+  wireNext();
+}
+function renderScore(){
+  const pct=Math.round(qScore/qSet.length*100);
+  const byCat={};
+  qWrong.forEach(q=>{byCat[q.c]=(byCat[q.c]||0)+1});
+  const verdict=pct>=85?"Excellent — exam-ready territory. Target ≥85% consistently.":pct>=70?"Good — the AZ-305 pass mark is ~70%. Review the misses and drill again.":"Keep going — reread the study sections for your weak categories, then retry.";
+  quizArea.innerHTML=`<div class="scorebox">
+    <div class="big">${pct}%</div>
+    <p>${qScore} of ${qSet.length} correct</p>
+    <p style="color:var(--muted);max-width:480px;margin:10px auto">${verdict}</p>
+    ${qWrong.length?`<div class="catgrid">${Object.entries(byCat).map(([c,n])=>`<div class="catline">⚠️ ${CATNAMES[c]||c}: ${n} missed</div>`).join("")}</div>`:""}
+    <div style="margin-top:22px"><button class="btn primary" id="qAgain">Take another quiz</button>
+    ${qWrong.length?'<button class="btn" id="qRedo" style="margin-left:8px">Retry missed questions</button>':""}</div>
+  </div>`;
+  document.getElementById("qAgain").addEventListener("click",()=>{quizArea.innerHTML="";});
+  const rd=document.getElementById("qRedo");
+  if(rd)rd.addEventListener("click",()=>{qSet=shuffle(qWrong);qIdx=0;qScore=0;qWrong=[];renderQ()});
+}
+
+/* ---------- FLASHCARDS ---------- */
+const fcCatSel=document.getElementById("fcCat");
+fillCats(fcCatSel,CARDS);
+document.getElementById("fcBank").textContent=CARDS.length+" cards in deck";
+let deck=[],ci=0,known={};
+try{known=JSON.parse(localStorage.getItem("aam-known")||"{}")}catch(e){known={}}
+const cardEl=document.getElementById("fcard");
+function keyOf(c){return c.c+"|"+c.f}
+function buildDeck(doShuffle){
+  const cat=fcCatSel.value||"all";
+  deck=CARDS.filter(c=>cat==="all"||c.c===cat);
+  if(doShuffle)deck=shuffle(deck);
+  ci=0;showCard();
+}
+function showCard(){
+  if(!deck.length){document.getElementById("fcFront").textContent="No cards";return}
+  const c=deck[ci];
+  cardEl.classList.remove("flipped");
+  document.getElementById("fcCatLbl").textContent=CATNAMES[c.c]||c.c;
+  document.getElementById("fcCatLbl2").textContent=CATNAMES[c.c]||c.c;
+  document.getElementById("fcFront").textContent=c.f;
+  document.getElementById("fcBack").textContent=c.b;
+  document.getElementById("fcCount").textContent=(ci+1)+" / "+deck.length;
+  updStats();
+}
+function updStats(){
+  const tot=deck.length;
+  const k=deck.filter(c=>known[keyOf(c)]).length;
+  document.getElementById("fcStats").textContent=`Marked known: ${k} / ${tot} in this deck`;
+}
+cardEl.addEventListener("click",()=>cardEl.classList.toggle("flipped"));
+document.getElementById("fcNext").addEventListener("click",()=>{ci=(ci+1)%deck.length;showCard()});
+document.getElementById("fcPrev").addEventListener("click",()=>{ci=(ci-1+deck.length)%deck.length;showCard()});
+document.getElementById("fcShuffle").addEventListener("click",()=>buildDeck(true));
+fcCatSel.addEventListener("change",()=>buildDeck(false));
+document.getElementById("fcKnow").addEventListener("click",()=>{known[keyOf(deck[ci])]=1;save();ci=(ci+1)%deck.length;showCard()});
+document.getElementById("fcDont").addEventListener("click",()=>{delete known[keyOf(deck[ci])];save();ci=(ci+1)%deck.length;showCard()});
+document.getElementById("fcReset").addEventListener("click",()=>{known={};save();updStats()});
+function save(){try{localStorage.setItem("aam-known",JSON.stringify(known))}catch(e){}}
+document.addEventListener("keydown",e=>{
+  if(!document.getElementById("view-cards").classList.contains("active"))return;
+  if(e.code==="Space"){e.preventDefault();cardEl.classList.toggle("flipped")}
+  if(e.key==="ArrowRight"){ci=(ci+1)%deck.length;showCard()}
+  if(e.key==="ArrowLeft"){ci=(ci-1+deck.length)%deck.length;showCard()}
+});
+
+/* ---------- SEARCH ---------- */
+(function(){
+  const inp=document.getElementById("searchInp"),cnt=document.getElementById("searchCnt");
+  let marks=[],pos=-1,tm;
+  function clear(){marks.forEach(m=>{const p=m.parentNode;if(p){p.replaceChild(document.createTextNode(m.textContent),m);p.normalize()}});marks=[];pos=-1;cnt.textContent=""}
+  function run(){
+    clear();
+    const qy=inp.value.trim().toLowerCase();
+    if(qy.length<2)return;
+    document.querySelectorAll(".secbody").forEach(s=>s.classList.remove("collapsed"));
+    document.querySelectorAll("#content h2 .caret").forEach(c=>c.textContent=" ▾");
+    const walker=document.createTreeWalker(document.getElementById("content"),NodeFilter.SHOW_TEXT);
+    const nodes=[];let n;
+    while(n=walker.nextNode()){if(n.textContent.toLowerCase().includes(qy))nodes.push(n)}
+    nodes.forEach(node=>{
+      const txt=node.textContent,lower=txt.toLowerCase();
+      const frag=document.createDocumentFragment();let i=0,j;
+      while((j=lower.indexOf(qy,i))!==-1){
+        frag.appendChild(document.createTextNode(txt.slice(i,j)));
+        const mk=document.createElement("mark");mk.className="hl";mk.textContent=txt.slice(j,j+qy.length);
+        frag.appendChild(mk);marks.push(mk);i=j+qy.length;
+      }
+      frag.appendChild(document.createTextNode(txt.slice(i)));
+      node.parentNode.replaceChild(frag,node);
+    });
+    cnt.textContent=marks.length?marks.length+" matches":"no matches";
+    if(marks.length)go(0);
+  }
+  function go(k){
+    if(!marks.length)return;
+    if(pos>=0&&marks[pos])marks[pos].style.outline="";
+    pos=(k+marks.length)%marks.length;
+    marks[pos].style.outline="2px solid var(--accent)";
+    if(marks[pos].scrollIntoView)marks[pos].scrollIntoView({block:"center"});
+    cnt.textContent=(pos+1)+" / "+marks.length;
+  }
+  inp.addEventListener("input",()=>{clearTimeout(tm);tm=setTimeout(run,300)});
+  inp.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();go(pos+1)}});
+  document.getElementById("searchNext").addEventListener("click",()=>go(pos+1));
+  document.getElementById("searchPrev").addEventListener("click",()=>go(pos-1));
+})();
+/* ---------- MERMAID ---------- */
+(async function(){
+  const blocks=[...document.querySelectorAll("#content code.language-mermaid, #content code.mermaid")];
+  if(!blocks.length)return;
+  try{
+    const mod=await import("https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.esm.min.mjs");
+    const mermaid=mod.default;
+    blocks.forEach(c=>{
+      const d=document.createElement("div");d.className="mermaid";d.textContent=c.textContent;
+      const pre=c.closest("pre");pre.parentNode.replaceChild(d,pre);
+    });
+    mermaid.initialize({startOnLoad:false,theme:document.body.dataset.theme==="dark"?"dark":"neutral",securityLevel:"loose"});
+    await mermaid.run({querySelector:".mermaid"});
+  }catch(e){console.warn("Mermaid unavailable — diagrams shown as code blocks",e)}
+})();
+buildDeck(true);
+</script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+[
+{"c":"APIM","f":"Multi-region APIM behavior","b":"Premium replicates gateways to added regions; primary region hosts the management plane; route callers to nearest gateway."},
+{"c":"APIM","f":"CORS in APIM","b":"cors policy at the appropriate scope — required before browser-based consumers can call your APIs."},
+{"c":"ServiceBus","f":"Max delivery count","b":"Deliveries before automatic dead-lettering (default 10) — tune with retry expectations."},
+{"c":"ServiceBus","f":"Prefetch","b":"Client pre-fetches messages to boost throughput; balance against lock expiry risk."},
+{"c":"RBAC","f":"Reader vs Monitoring Reader","b":"Use purpose-built limited roles where possible; Reader sees configuration of everything in scope."},
+{"c":"RBAC","f":"Elevate access (Global Admin)","b":"Break-glass toggle granting UAA at root '/'; audited; remove after use."},
+{"c":"Networking","f":"Global VNet peering","b":"Cross-region, cross-subscription private connectivity over Microsoft backbone; non-transitive."},
+{"c":"Networking","f":"Forced tunneling","b":"Send internet-bound traffic to on-prem/NVA via UDR/BGP for inspection/compliance."},
+{"c":"ContainerApps","f":"Ingress options","b":"External or internal-only; HTTPS by default (Envoy), TCP supported, IP restrictions, custom domains, session affinity."},
+{"c":"ContainerApps","f":"Traffic splitting example","b":"Revision A 90% / Revision B 10% → observe metrics → shift to 100% B or roll back instantly."},
+{"c":"Auth","f":"OBO flow mechanics","b":"API exchanges the incoming user token (assertion) at Entra for a downstream-API token preserving user identity."},
+{"c":"Auth","f":"Token lifetime defaults","b":"Access tokens ~60–90 min; refresh via MSAL silently; design APIs to tolerate token refresh mid-session."},
+{"c":"Patterns","f":"Choreography vs orchestration (saga)","b":"Choreography: services react to events (loose coupling). Orchestration: central coordinator (Durable Functions/Logic Apps) directs steps."},
+{"c":"Patterns","f":"Materialized view","b":"Precompute query-optimized views from the write model — common CQRS read side."},
+{"c":"Exam","f":"Case study time strategy","b":"Read requirements/constraints first, skim background, answer requirement-by-requirement; ~2 case studies typical."},
+{"c":"Exam","f":"Renewal","b":"Microsoft certs renew annually via a FREE online, open-book renewal assessment on Microsoft Learn."}
+]
