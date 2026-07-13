@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cloud infrastructure learning path</title>
+<meta name="description" content="A seven-stage, hands-on learning path for software developers moving into cloud infrastructure." />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --void: #0a0e14;
+    --panel: #121822;
+    --panel-hover: #161e2a;
+    --line: #212b38;
+    --text: #e8edf2;
+    --text-dim: #8b98a9;
+    --text-faint: #56626f;
+    --signal: #3ecf8e;
+    --signal-dim: #1c4d3a;
+    --wire: #5b9dff;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--void);
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 48px 48px;
+    background-attachment: fixed;
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+  }
+  .wrap { max-width: 780px; margin: 0 auto; padding: 4rem 1.5rem 6rem; }
+
+  header { margin-bottom: 3rem; }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    color: var(--signal);
+    text-transform: uppercase;
+    margin: 0 0 0.75rem;
+  }
+  h1 {
+    font-family: var(--mono);
+    font-size: clamp(28px, 5vw, 40px);
+    font-weight: 700;
+    line-height: 1.2;
+    margin: 0 0 0.75rem;
+    letter-spacing: -0.01em;
+  }
+  header p {
+    color: var(--text-dim);
+    font-size: 16px;
+    max-width: 56ch;
+    margin: 0;
+  }
+
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 2rem 0 2.5rem;
+    padding: 0.9rem 1.1rem;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--signal);
+    box-shadow: 0 0 8px var(--signal);
+    flex-shrink: 0;
+  }
+  .status-track {
+    flex: 1; height: 4px; background: var(--line); border-radius: 99px; overflow: hidden;
+  }
+  .status-fill {
+    height: 100%; width: 0%; background: var(--signal);
+    transition: width 0.3s ease;
+  }
+  #status-text { color: var(--text-dim); white-space: nowrap; }
+
+  /* pipeline diagram */
+  .pipeline { margin: 0 0 3rem; }
+  .pipeline svg { width: 100%; display: block; overflow: visible; }
+  .pipeline-node circle {
+    fill: var(--panel); stroke: var(--line); stroke-width: 2;
+    transition: fill 0.3s ease, stroke 0.3s ease;
+  }
+  .pipeline-node.done circle { fill: var(--signal-dim); stroke: var(--signal); }
+  .pipeline-node text {
+    font-family: var(--mono); font-size: 11px; fill: var(--text-faint);
+    transition: fill 0.3s ease;
+  }
+  .pipeline-node.done text { fill: var(--signal); }
+  .pipeline-node { cursor: pointer; }
+  .pipeline-node:focus-visible circle { stroke: var(--wire); stroke-width: 3; }
+  .pipeline-edge { stroke: var(--line); stroke-width: 2; transition: stroke 0.3s ease; }
+  .pipeline-edge.done { stroke: var(--signal); }
+
+  section.stage {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 1.5rem 1.5rem 1.6rem;
+    margin-bottom: 1rem;
+    scroll-margin-top: 1.5rem;
+  }
+  .stage-head {
+    display: flex; align-items: flex-start; gap: 1rem;
+  }
+  .stage-num {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-faint);
+    padding-top: 3px;
+    flex-shrink: 0;
+    min-width: 56px;
+  }
+  .stage-num span { color: var(--signal); }
+  .stage-title-row { flex: 1; min-width: 0; }
+  .stage h2 {
+    font-family: var(--mono);
+    font-size: 18px;
+    font-weight: 500;
+    margin: 0 0 0.5rem;
+  }
+  .badges { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 0.9rem; }
+  .badge {
+    font-family: var(--mono); font-size: 11px;
+    padding: 3px 9px; border-radius: 99px;
+    border: 1px solid var(--line); color: var(--text-dim);
+  }
+  .stage .obj { color: var(--text-dim); font-size: 14px; margin: 0 0 0.9rem; }
+  .stage .task {
+    font-size: 14.5px; margin: 0 0 1rem;
+    border-left: 2px solid var(--line);
+    padding-left: 12px;
+  }
+  .task-label {
+    font-family: var(--mono); font-size: 11px; color: var(--wire);
+    text-transform: uppercase; letter-spacing: 0.06em; display: block; margin-bottom: 4px;
+  }
+  .stage-footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+  .resource-link {
+    font-family: var(--mono); font-size: 12px; color: var(--wire); text-decoration: none;
+    border-bottom: 1px solid transparent;
+  }
+  .resource-link:hover { border-bottom-color: var(--wire); }
+  .complete-toggle {
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 12px; color: var(--text-dim);
+    cursor: pointer; user-select: none;
+    padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line);
+    background: transparent;
+  }
+  .complete-toggle:hover { background: var(--panel-hover); }
+  .complete-toggle input { width: 15px; height: 15px; accent-color: var(--signal); cursor: pointer; }
+  section.stage.is-done { border-color: var(--signal-dim); }
+  section.stage.is-done .stage-num span { color: var(--signal); }
+
+  footer {
+    margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+  }
+  footer p { font-size: 12px; color: var(--text-faint); font-family: var(--mono); margin: 0; }
+  #reset-btn {
+    font-family: var(--mono); font-size: 12px; color: var(--text-dim);
+    background: transparent; border: 1px solid var(--line); border-radius: 6px;
+    padding: 6px 12px; cursor: pointer;
+  }
+  #reset-btn:hover { border-color: var(--text-dim); color: var(--text); }
+
+  a:focus-visible, button:focus-visible, .complete-toggle:focus-within {
+    outline: 2px solid var(--wire); outline-offset: 2px;
+  }
+
+  @media (max-width: 600px) {
+    .pipeline { overflow-x: auto; }
+    .pipeline svg { min-width: 640px; }
+    .stage-head { gap: 0.6rem; }
+    .stage-num { min-width: 40px; font-size: 11px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">// self-paced curriculum</p>
+    <h1>Cloud infrastructure learning path</h1>
+    <p>Seven stages, each ending in something real you deployed — not a slide. Built for developers who already know how to code and want to learn to run things in the cloud.</p>
+  </header>
+
+  <div class="status-bar">
+    <span class="status-dot" aria-hidden="true"></span>
+    <div class="status-track"><div class="status-fill" id="status-fill"></div></div>
+    <span id="status-text">0 / 7 stages complete</span>
+  </div>
+
+  <nav class="pipeline" aria-label="Jump to stage">
+    <svg viewBox="0 0 720 90" role="img" aria-label="Pipeline of seven stages">
+      <line class="pipeline-edge" id="edge" x1="40" y1="45" x2="680" y2="45" />
+    </svg>
+  </nav>
+
+  <main id="stages"></main>
+
+  <footer>
+    <p>Progress saves automatically in this browser.</p>
+    <button id="reset-btn" type="button">Reset progress</button>
+  </footer>
+
+</div>
+
+<script>
+  const STAGES = [
+    {
+      id: "fundamentals",
+      title: "Cloud fundamentals and account setup",
+      diff: "Beginner", time: "2-3 hrs",
+      obj: "Understand core building blocks: regions, availability zones, IaaS vs PaaS vs SaaS.",
+      task: "Create a free-tier account on one provider. Manually provision a VPC, a subnet, and a single VM. Document every resource you created and why it exists, then delete it all by hand.",
+      link: "https://docs.aws.amazon.com/", linkText: "AWS documentation"
+    },
+    {
+      id: "iac",
+      title: "Infrastructure as code",
+      diff: "Beginner-intermediate", time: "3-4 hrs",
+      obj: "Move from console clicks to reproducible, version-controlled infrastructure.",
+      task: "Rewrite yesterday's VPC and VM as Terraform. Destroy and re-apply it twice to prove it's idempotent. Commit the code to a repo.",
+      link: "https://developer.hashicorp.com/terraform/docs", linkText: "Terraform documentation"
+    },
+    {
+      id: "containers",
+      title: "Containers and orchestration",
+      diff: "Intermediate", time: "4-6 hrs",
+      obj: "Package an app so it runs identically anywhere, then let a scheduler manage it.",
+      task: "Containerize an app you already have. Push the image to a registry, then deploy it to a managed Kubernetes or container service with two or more replicas.",
+      link: "https://kubernetes.io/docs/home/", linkText: "Kubernetes documentation"
+    },
+    {
+      id: "networking",
+      title: "Networking and security",
+      diff: "Intermediate", time: "3-4 hrs",
+      obj: "Design least-privilege access and a network that limits blast radius.",
+      task: "Split your VPC into public and private subnets. Put the app behind a load balancer, the database in the private subnet, and write IAM roles scoped to only what each service needs.",
+      link: "https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html", linkText: "IAM best practices"
+    },
+    {
+      id: "cicd",
+      title: "CI/CD for infrastructure",
+      diff: "Intermediate", time: "3-4 hrs",
+      obj: "Automate the plan-review-apply cycle so changes are tested, not typed.",
+      task: "Build a pipeline that runs a Terraform plan on every pull request and applies on merge to main. Require the plan output as part of code review.",
+      link: "https://docs.github.com/actions", linkText: "GitHub Actions documentation"
+    },
+    {
+      id: "observability",
+      title: "Observability and cost control",
+      diff: "Intermediate", time: "2-3 hrs",
+      obj: "Know when something breaks before a user tells you, and what it costs.",
+      task: "Add metrics, logs, and one alert (like a high error rate) for your deployed app. Set a budget alert so you're notified before a bill surprises you.",
+      link: "https://prometheus.io/docs/introduction/overview/", linkText: "Prometheus documentation"
+    },
+    {
+      id: "capstone",
+      title: "Capstone: end-to-end system",
+      diff: "Advanced", time: "1-2 weeks",
+      obj: "Bring every stage together into one deployable, observable, autoscaled system.",
+      task: "Deploy a three-tier app (frontend, API, database) entirely from IaC, behind CI/CD, with autoscaling rules, dashboards, and alerting. Write a one-page runbook for an incident.",
+      link: "https://12factor.net/", linkText: "The twelve-factor app"
+    }
+  ];
+
+  const STORE_KEY = "cloud-infra-path:progress";
+  const load = () => { try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch (e) { return {}; } };
+  const save = (state) => { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {} };
+  let state = load();
+
+  const stagesEl = document.getElementById('stages');
+  STAGES.forEach((s, i) => {
+    const num = String(i + 1).padStart(2, '0');
+    const section = document.createElement('section');
+    section.className = 'stage';
+    section.id = s.id;
+    section.innerHTML = `
+      <div class="stage-head">
+        <div class="stage-num">STAGE<br><span>${num}</span></div>
+        <div class="stage-title-row">
+          <h2>${s.title}</h2>
+          <div class="badges">
+            <span class="badge">${s.diff}</span>
+            <span class="badge">${s.time}</span>
+          </div>
+          <p class="obj">${s.obj}</p>
+          <p class="task"><span class="task-label">Hands-on</span>${s.task}</p>
+          <div class="stage-footer">
+            <a class="resource-link" href="${s.link}" target="_blank" rel="noopener">${s.linkText} &rarr;</a>
+            <label class="complete-toggle">
+              <input type="checkbox" data-id="${s.id}" />
+              <span class="toggle-label">Mark complete</span>
+            </label>
+          </div>
+        </div>
+      </div>
+    `;
+    stagesEl.appendChild(section);
+  });
+
+  // pipeline nodes
+  const svg = document.querySelector('.pipeline svg');
+  const positions = STAGES.map((_, i) => 40 + i * (640 / (STAGES.length - 1)));
+  STAGES.forEach((s, i) => {
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'a');
+    g.setAttribute('href', '#' + s.id);
+    g.setAttribute('class', 'pipeline-node');
+    g.setAttribute('tabindex', '0');
+    g.setAttribute('id', 'node-' + s.id);
+    g.innerHTML = `
+      <circle cx="${positions[i]}" cy="45" r="16"></circle>
+      <text x="${positions[i]}" y="49" text-anchor="middle">${i + 1}</text>
+      <text x="${positions[i]}" y="75" text-anchor="middle" style="font-size:9px;">${s.id.slice(0,4)}</text>
+    `;
+    svg.appendChild(g);
+  });
+
+  function render() {
+    let doneCount = 0;
+    STAGES.forEach(s => {
+      const done = !!state[s.id];
+      if (done) doneCount++;
+      const section = document.getElementById(s.id);
+      const checkbox = section.querySelector('input[type="checkbox"]');
+      checkbox.checked = done;
+      section.classList.toggle('is-done', done);
+      document.getElementById('node-' + s.id).classList.toggle('done', done);
+    });
+    const pct = Math.round((doneCount / STAGES.length) * 100);
+    document.getElementById('status-fill').style.width = pct + '%';
+    document.getElementById('status-text').textContent = doneCount + ' / ' + STAGES.length + ' stages complete';
+    document.getElementById('edge').setAttribute('stroke-dasharray', '640');
+    document.getElementById('edge').setAttribute('stroke-dashoffset', String(640 - (640 * doneCount / STAGES.length)));
+    document.getElementById('edge').classList.toggle('done', doneCount > 0);
+  }
+
+  stagesEl.addEventListener('change', (e) => {
+    if (e.target.matches('input[type="checkbox"]')) {
+      const id = e.target.getAttribute('data-id');
+      state[id] = e.target.checked;
+      save(state);
+      render();
+    }
+  });
+
+  document.getElementById('reset-btn').addEventListener('click', () => {
+    state = {};
+    save(state);
+    render();
+  });
+
+  render();
+</script>
+</body>
+</html>
