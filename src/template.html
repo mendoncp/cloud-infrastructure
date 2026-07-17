@@ -57,6 +57,7 @@ article.content{min-width:0;background:var(--panel);border:1px solid var(--borde
 .content pre code{background:none;border:none;padding:0}
 .content strong{color:var(--text)}
 .content hr{border:none;border-top:1px solid var(--border);margin:26px 0}
+.content blockquote{border-left:3px solid var(--accent);padding:6px 14px;margin:12px 0;background:var(--panel2);border-radius:0 8px 8px 0}
 /* QUIZ */
 .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:24px;box-shadow:var(--shadow)}
 .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:18px}
@@ -93,17 +94,6 @@ button.btn:disabled{opacity:.45;cursor:not-allowed}
 .kb.know{background:color-mix(in srgb,var(--good) 18%,var(--panel));color:var(--good);border-color:var(--good)}
 .kb.dontknow{background:color-mix(in srgb,var(--bad) 14%,var(--panel));color:var(--bad);border-color:var(--bad)}
 .fcstats{text-align:center;color:var(--muted);font-size:.85rem;margin-top:10px}
-mark.hl{background:var(--warn);color:#111;border-radius:3px;padding:0 2px}
-.content h2{cursor:pointer;user-select:none}
-.content h2 .caret{color:var(--muted);font-size:.8em}
-.secbody.collapsed{display:none}
-.opt.sel{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--panel2))}
-.ostep{display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin:8px 0;font-size:.93rem}
-.ostep .num{background:var(--accent);color:#fff;border-radius:6px;min-width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700}
-.ostep.ok{border-color:var(--good)} .ostep.ko{border-color:var(--bad)}
-.ostep .omv{padding:4px 10px}
-.dbadge{margin-left:6px}
-.mermaid{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:14px;margin:14px 0;text-align:center;overflow:auto}
 footer{border-top:1px solid var(--border);color:var(--muted);text-align:center;padding:24px;font-size:.85rem}
 @media(max-width:900px){.studywrap{grid-template-columns:1fr}aside#toc{position:static;max-height:none}}
 </style>
@@ -123,13 +113,6 @@ footer{border-top:1px solid var(--border);color:var(--muted);text-align:center;p
 <main>
   <!-- STUDY -->
   <section id="view-study" class="view active">
-    <div class="card" style="margin-bottom:14px;display:flex;gap:8px;align-items:center;padding:10px 14px">
-      <span>🔎</span>
-      <input id="searchInp" placeholder="Search the study guide… (min 2 chars)" style="flex:1;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text);font-family:inherit">
-      <button class="btn" id="searchPrev" title="Previous match">↑</button>
-      <button class="btn" id="searchNext" title="Next match">↓</button>
-      <span id="searchCnt" style="color:var(--muted);font-size:.85rem;min-width:86px;text-align:right"></span>
-    </div>
     <div class="studywrap">
       <aside id="toc"></aside>
       <article class="content" id="content">__CONTENT__</article>
@@ -210,17 +193,9 @@ try{const t=localStorage.getItem("aam-theme");if(t)setTheme(t)}catch(e){}
 /* ---------- TOC ---------- */
 (function(){
   const toc=document.getElementById("toc");
-  const content=document.getElementById("content");
-  [...content.querySelectorAll("h2")].forEach((h,i)=>{
+  document.querySelectorAll("#content h2").forEach((h,i)=>{
     h.id="sec-"+i;
     const a=document.createElement("a");a.href="#sec-"+i;a.textContent=h.textContent;toc.appendChild(a);
-    const body=document.createElement("div");body.className="secbody";
-    let n=h.nextSibling;
-    while(n&&!(n.nodeType===1&&n.tagName==="H2")){const nx=n.nextSibling;body.appendChild(n);n=nx}
-    h.parentNode.insertBefore(body,h.nextSibling);
-    const caret=document.createElement("span");caret.className="caret";caret.textContent=" ▾";h.appendChild(caret);
-    h.addEventListener("click",()=>{body.classList.toggle("collapsed");caret.textContent=body.classList.contains("collapsed")?" ▸":" ▾"});
-    a.addEventListener("click",()=>{body.classList.remove("collapsed");caret.textContent=" ▾"});
   });
   const links=[...toc.querySelectorAll("a")];
   window.addEventListener("scroll",()=>{
@@ -250,84 +225,92 @@ document.getElementById("quizStart").addEventListener("click",()=>{
   qSet=pool.slice(0,n);qIdx=0;qScore=0;qWrong=[];
   renderQ();
 });
-function qHead(q){
-  const db=q.d?(q.d===1?'<span class="dbadge" title="easy">🟢</span>':q.d===2?'<span class="dbadge" title="medium">🟡</span>':'<span class="dbadge" title="hard">🔴</span>'):"";
-  return `<div class="progressbar"><div style="width:${(qIdx/qSet.length)*100}%"></div></div>
-    <div class="qmeta"><span>Question ${qIdx+1} / ${qSet.length} · ${CATNAMES[q.c]||q.c}${db}</span><span>Score: ${qScore}</span></div>
-    <div class="qtext">${q.q}</div>`;
-}
-function qFoot(){return `<div class="explain" id="explain"></div>
-    <div style="margin-top:16px;text-align:right"><button class="btn primary" id="qNext" disabled>Next →</button></div>`}
-function wireNext(){document.getElementById("qNext").addEventListener("click",()=>{qIdx++;renderQ()})}
-function showExplain(right,extra,q){
+function finishQ(right,q,extra){
+  if(right)qScore++;else qWrong.push(q);
   const ex=document.getElementById("explain");
   ex.innerHTML=(right?"✅ <strong>Correct.</strong> ":"❌ <strong>Not quite.</strong> ")+(extra||"")+q.e;
   ex.style.display="block";
+  const meta=quizArea.querySelector(".qmeta span:last-child");
+  if(meta)meta.textContent="Score: "+qScore;
   document.getElementById("qNext").disabled=false;
+}
+function qShell(q,body,checkBtn){
+  const type=q.t||"single";
+  const hint=type==="multi"?` <em style="color:var(--muted)">(select ${q.a.length})</em>`:type==="order"?` <em style="color:var(--muted)">(click items in order; click again to unpick)</em>`:"";
+  quizArea.innerHTML=`
+    <div class="progressbar"><div style="width:${(qIdx/qSet.length)*100}%"></div></div>
+    <div class="qmeta"><span>Question ${qIdx+1} / ${qSet.length} · ${CATNAMES[q.c]||q.c}</span><span>Score: ${qScore}</span></div>
+    <div class="qtext">${q.q}${hint}</div>
+    <div id="opts">${body}</div>
+    <div class="explain" id="explain"></div>
+    <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:8px">
+      ${checkBtn?'<button class="btn primary" id="qCheck" disabled>Check answer</button>':""}
+      <button class="btn primary" id="qNext" disabled>Next →</button></div>`;
+  document.getElementById("qNext").addEventListener("click",()=>{qIdx++;renderQ()});
 }
 function renderQ(){
   if(qIdx>=qSet.length){return renderScore()}
   const q=qSet[qIdx];
-  if(q.t==="multi")return renderMulti(q);
-  if(q.t==="order")return renderOrder(q);
-  const opts=shuffle(q.o.map((t,i)=>({t,ok:i===q.a})));
-  quizArea.innerHTML=qHead(q)+
-    `<div id="opts">${opts.map((o,i)=>`<button class="opt" data-ok="${o.ok?1:0}">${String.fromCharCode(65+i)}. ${o.t}</button>`).join("")}`+qFoot();
-  const btns=[...quizArea.querySelectorAll(".opt")];
-  btns.forEach(b=>b.addEventListener("click",()=>{
-    btns.forEach(x=>{x.disabled=true;if(x.dataset.ok==="1")x.classList.add("correct")});
-    const right=b.dataset.ok==="1";
-    if(right)qScore++;else{b.classList.add("wrong");qWrong.push(q)}
-    showExplain(right,"",q);
-  }));
-  wireNext();
-}
-function renderMulti(q){
-  const opts=shuffle(q.o.map((t,i)=>({t,i})));
-  quizArea.innerHTML=qHead(q)+
-    `<p style="color:var(--muted);font-size:.85rem;margin-bottom:8px">Multi-select — choose all that apply, then submit.</p>
-     <div id="opts">${opts.map((o,i)=>`<button class="opt" data-i="${o.i}">${String.fromCharCode(65+i)}. ${o.t}</button>`).join("")}</div>
-     <div style="margin-top:12px"><button class="btn primary" id="qSubmit">Submit answer</button></div>`+qFoot();
-  const btns=[...quizArea.querySelectorAll(".opt")];
-  btns.forEach(b=>b.addEventListener("click",()=>{if(!b.disabled)b.classList.toggle("sel")}));
-  document.getElementById("qSubmit").addEventListener("click",()=>{
-    const sel=new Set(btns.filter(b=>b.classList.contains("sel")).map(b=>+b.dataset.i));
-    const ans=new Set(q.a);
-    const right=sel.size===ans.size&&[...sel].every(x=>ans.has(x));
-    btns.forEach(b=>{b.disabled=true;const i=+b.dataset.i;
-      if(ans.has(i))b.classList.add("correct");else if(sel.has(i))b.classList.add("wrong")});
-    document.getElementById("qSubmit").disabled=true;
-    if(right)qScore++;else qWrong.push(q);
-    showExplain(right,"",q);
-  });
-  wireNext();
-}
-function renderOrder(q){
-  let arr=shuffle(q.o.map((t,i)=>({t,i})));
-  if(arr.every((x,k)=>x.i===k))arr=arr.slice().reverse();
-  quizArea.innerHTML=qHead(q)+
-    `<p style="color:var(--muted);font-size:.85rem;margin-bottom:8px">Ordering — arrange the steps with ▲▼, then check.</p>
-     <div id="osteps"></div>
-     <div style="margin-top:12px"><button class="btn primary" id="qCheck">Check order</button></div>`+qFoot();
-  const box=document.getElementById("osteps");
-  function draw(){
-    box.innerHTML=arr.map((s,k)=>`<div class="ostep"><span class="num">${k+1}</span><span style="flex:1">${s.t}</span>
-      <button class="btn omv" data-k="${k}" data-d="-1" ${k===0?"disabled":""}>▲</button>
-      <button class="btn omv" data-k="${k}" data-d="1" ${k===arr.length-1?"disabled":""}>▼</button></div>`).join("");
-    [...box.querySelectorAll(".omv")].forEach(b=>b.addEventListener("click",()=>{
-      const k=+b.dataset.k,d=+b.dataset.d;[arr[k],arr[k+d]]=[arr[k+d],arr[k]];draw();
+  const type=q.t||"single";
+  if(type==="single"){
+    const opts=shuffle(q.o.map((t,i)=>({t,ok:i===q.a})));
+    qShell(q,opts.map((o,i)=>`<button class="opt" data-ok="${o.ok?1:0}">${String.fromCharCode(65+i)}. ${o.t}</button>`).join(""),false);
+    const btns=[...quizArea.querySelectorAll(".opt")];
+    btns.forEach(b=>b.addEventListener("click",()=>{
+      btns.forEach(x=>{x.disabled=true;if(x.dataset.ok==="1")x.classList.add("correct")});
+      const right=b.dataset.ok==="1";
+      if(!right)b.classList.add("wrong");
+      finishQ(right,q);
     }));
+  }else if(type==="multi"){
+    const opts=shuffle(q.o.map((t,i)=>({t,ok:q.a.includes(i)})));
+    qShell(q,opts.map((o,i)=>`<button class="opt" data-ok="${o.ok?1:0}">${String.fromCharCode(65+i)}. ${o.t}</button>`).join(""),true);
+    const btns=[...quizArea.querySelectorAll(".opt")],check=document.getElementById("qCheck");
+    btns.forEach(b=>b.addEventListener("click",()=>{
+      b.classList.toggle("sel");
+      b.style.borderColor=b.classList.contains("sel")?"var(--accent)":"";
+      b.style.background=b.classList.contains("sel")?"color-mix(in srgb,var(--accent) 14%,var(--panel2))":"";
+      check.disabled=quizArea.querySelectorAll(".opt.sel").length===0;
+    }));
+    check.addEventListener("click",()=>{
+      let right=true;
+      btns.forEach(x=>{
+        const sel=x.classList.contains("sel"),ok=x.dataset.ok==="1";
+        x.disabled=true;x.style.borderColor="";x.style.background="";
+        if(ok)x.classList.add("correct");
+        if(sel!==ok){right=false;if(sel&&!ok)x.classList.add("wrong")}
+      });
+      check.disabled=true;
+      finishQ(right,q);
+    });
+  }else{ // order
+    const items=shuffle(q.o.map((t,i)=>({t,pos:i})));
+    qShell(q,items.map((o,i)=>`<button class="opt" data-pos="${o.pos}"><span class="ordnum" style="display:inline-block;min-width:26px;font-weight:700;color:var(--accent)"></span>${o.t}</button>`).join(""),true);
+    const btns=[...quizArea.querySelectorAll(".opt")],check=document.getElementById("qCheck");
+    let picked=[];
+    const paint=()=>{btns.forEach(b=>{
+      const idx=picked.indexOf(b);
+      b.querySelector(".ordnum").textContent=idx>=0?(idx+1)+".":"";
+      b.style.borderColor=idx>=0?"var(--accent)":"";
+    });check.disabled=picked.length!==btns.length};
+    btns.forEach(b=>b.addEventListener("click",()=>{
+      const idx=picked.indexOf(b);
+      if(idx>=0)picked.splice(idx,1);else picked.push(b);
+      paint();
+    }));
+    check.addEventListener("click",()=>{
+      let right=true;
+      picked.forEach((b,i)=>{
+        b.disabled=true;
+        const ok=parseInt(b.dataset.pos)===i;
+        b.classList.add(ok?"correct":"wrong");
+        if(!ok)right=false;
+      });
+      check.disabled=true;
+      const correct="Correct order: "+q.o.map((t,i)=>(i+1)+". "+t).join(" → ")+"<br><br>";
+      finishQ(right,q,right?"":correct);
+    });
   }
-  draw();
-  document.getElementById("qCheck").addEventListener("click",()=>{
-    const right=arr.every((x,k)=>x.i===k);
-    [...box.querySelectorAll(".ostep")].forEach((el,k)=>el.classList.add(arr[k].i===k?"ok":"ko"));
-    [...box.querySelectorAll(".omv")].forEach(b=>b.disabled=true);
-    document.getElementById("qCheck").disabled=true;
-    if(right)qScore++;else qWrong.push(q);
-    showExplain(right,right?"":"Correct order:<br>"+q.o.map((s,i)=>(i+1)+". "+s).join("<br>")+"<br><br>",q);
-  });
-  wireNext();
 }
 function renderScore(){
   const pct=Math.round(qScore/qSet.length*100);
@@ -392,63 +375,6 @@ document.addEventListener("keydown",e=>{
   if(e.key==="ArrowRight"){ci=(ci+1)%deck.length;showCard()}
   if(e.key==="ArrowLeft"){ci=(ci-1+deck.length)%deck.length;showCard()}
 });
-
-/* ---------- SEARCH ---------- */
-(function(){
-  const inp=document.getElementById("searchInp"),cnt=document.getElementById("searchCnt");
-  let marks=[],pos=-1,tm;
-  function clear(){marks.forEach(m=>{const p=m.parentNode;if(p){p.replaceChild(document.createTextNode(m.textContent),m);p.normalize()}});marks=[];pos=-1;cnt.textContent=""}
-  function run(){
-    clear();
-    const qy=inp.value.trim().toLowerCase();
-    if(qy.length<2)return;
-    document.querySelectorAll(".secbody").forEach(s=>s.classList.remove("collapsed"));
-    document.querySelectorAll("#content h2 .caret").forEach(c=>c.textContent=" ▾");
-    const walker=document.createTreeWalker(document.getElementById("content"),NodeFilter.SHOW_TEXT);
-    const nodes=[];let n;
-    while(n=walker.nextNode()){if(n.textContent.toLowerCase().includes(qy))nodes.push(n)}
-    nodes.forEach(node=>{
-      const txt=node.textContent,lower=txt.toLowerCase();
-      const frag=document.createDocumentFragment();let i=0,j;
-      while((j=lower.indexOf(qy,i))!==-1){
-        frag.appendChild(document.createTextNode(txt.slice(i,j)));
-        const mk=document.createElement("mark");mk.className="hl";mk.textContent=txt.slice(j,j+qy.length);
-        frag.appendChild(mk);marks.push(mk);i=j+qy.length;
-      }
-      frag.appendChild(document.createTextNode(txt.slice(i)));
-      node.parentNode.replaceChild(frag,node);
-    });
-    cnt.textContent=marks.length?marks.length+" matches":"no matches";
-    if(marks.length)go(0);
-  }
-  function go(k){
-    if(!marks.length)return;
-    if(pos>=0&&marks[pos])marks[pos].style.outline="";
-    pos=(k+marks.length)%marks.length;
-    marks[pos].style.outline="2px solid var(--accent)";
-    if(marks[pos].scrollIntoView)marks[pos].scrollIntoView({block:"center"});
-    cnt.textContent=(pos+1)+" / "+marks.length;
-  }
-  inp.addEventListener("input",()=>{clearTimeout(tm);tm=setTimeout(run,300)});
-  inp.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();go(pos+1)}});
-  document.getElementById("searchNext").addEventListener("click",()=>go(pos+1));
-  document.getElementById("searchPrev").addEventListener("click",()=>go(pos-1));
-})();
-/* ---------- MERMAID ---------- */
-(async function(){
-  const blocks=[...document.querySelectorAll("#content code.language-mermaid, #content code.mermaid")];
-  if(!blocks.length)return;
-  try{
-    const mod=await import("https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.esm.min.mjs");
-    const mermaid=mod.default;
-    blocks.forEach(c=>{
-      const d=document.createElement("div");d.className="mermaid";d.textContent=c.textContent;
-      const pre=c.closest("pre");pre.parentNode.replaceChild(d,pre);
-    });
-    mermaid.initialize({startOnLoad:false,theme:document.body.dataset.theme==="dark"?"dark":"neutral",securityLevel:"loose"});
-    await mermaid.run({querySelector:".mermaid"});
-  }catch(e){console.warn("Mermaid unavailable — diagrams shown as code blocks",e)}
-})();
 buildDeck(true);
 </script>
 </body>
