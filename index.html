@@ -94,6 +94,13 @@ button.btn:disabled{opacity:.45;cursor:not-allowed}
 .kb.know{background:color-mix(in srgb,var(--good) 18%,var(--panel));color:var(--good);border-color:var(--good)}
 .kb.dontknow{background:color-mix(in srgb,var(--bad) 14%,var(--panel));color:var(--bad);border-color:var(--bad)}
 .fcstats{text-align:center;color:var(--muted);font-size:.85rem;margin-top:10px}
+/* INLINE QUICK CHECK */
+.inlinequiz{background:var(--panel2);border:1px dashed var(--accent);border-radius:12px;padding:16px 18px;margin:14px 0}
+.inlinequiz .iq{margin:14px 0;padding-top:10px;border-top:1px solid var(--border)}
+.inlinequiz .iq:first-of-type{border-top:none;padding-top:0}
+.inlinequiz .iqq{font-weight:600;margin-bottom:8px}
+.inlinequiz .opt{background:var(--panel)}
+.inlinequiz .iqscore{margin-top:14px;font-weight:700;color:var(--accent)}
 footer{border-top:1px solid var(--border);color:var(--muted);text-align:center;padding:24px;font-size:.85rem}
 @media(max-width:900px){.studywrap{grid-template-columns:1fr}aside#toc{position:static;max-height:none}}
 </style>
@@ -299,6 +306,27 @@ footer{border-top:1px solid var(--border);color:var(--muted);text-align:center;p
 <li>Diagnostics to Log Analytics; alerts on capacity, 4xx/5xx rates, latency.</li>
 </ol>
 <hr />
+<h3>📝 Quick Check — API Management</h3>
+<div class="inlinequiz" data-cat="APIM">Interactive quick check available in the web app. Full Q&A with explanations: see the Practice Questions appendix.</div>
+
+<h3>🧊 Whiteboard Challenges — APIM</h3>
+<p><strong>W1. A bank wants to expose 40 internal APIs to fintech partners with per-partner quotas, OAuth security, and zero public exposure of backends. Sketch the architecture and name the APIM features you'd use.</strong></p>
+<blockquote>
+<p><strong>Model answer:</strong> Front Door Premium (WAF, global TLS) → APIM Premium in <strong>internal VNet mode</strong> → private backends. Partners are onboarded via the <strong>developer portal</strong>; each gets a <strong>subscription</strong> under a partner-tier <strong>product</strong> carrying <code>quota</code> and <code>rate-limit-by-key</code> policies. <code>validate-jwt</code> against Entra ID (client credentials for partner apps) at global scope; <code>authentication-managed-identity</code> toward backends; Key Vault-backed <strong>named values</strong> for any residual secrets. Per-partner analytics come free from subscription attribution. Justify Premium: internal VNet + AZ redundancy; everything else would work on Standard v2 with VNet integration if injection weren't needed.</p>
+</blockquote>
+<p><strong>W2. During Black Friday, one consumer's buggy retry loop takes down the product API for everyone. Whiteboard the layered protections you should have had.</strong></p>
+<blockquote>
+<p><strong>Model answer:</strong> Edge: WAF rate limiting + bot rules. Gateway: <code>rate-limit-by-key</code> (keyed on subscription/JWT sub) so one consumer exhausts only their bucket — the <strong>throttling</strong> pattern; <code>quota</code> for longer-horizon caps; <strong>circuit breaker</strong> on the backend entity so APIM stops hammering a degraded backend; <code>retry</code> policy with backoff only for idempotent GETs. Backend: <strong>bulkhead</strong> — separate ACA revisions/pools per consumer tier; <strong>queue-based load leveling</strong> for writes via Service Bus. Monitoring: alert on 429 ratio per subscription to catch the loop early. Key exam point: 429 the abuser, don't scale to absorb them.</p>
+</blockquote>
+<h3>📚 Key Resources — APIM</h3>
+<ul>
+<li><a href="https://learn.microsoft.com/azure/api-management/">APIM documentation home</a></li>
+<li><a href="https://learn.microsoft.com/azure/api-management/api-management-policies">APIM policy reference (every policy)</a></li>
+<li><a href="https://learn.microsoft.com/azure/api-management/api-management-features">APIM tiers &amp; feature comparison</a></li>
+<li><a href="https://learn.microsoft.com/azure/api-management/virtual-network-concepts">APIM VNet integration options</a></li>
+<li><a href="https://learn.microsoft.com/azure/architecture/example-scenario/integration/app-gateway-internal-api-management-function">APIM landing zone accelerator (Architecture Center)</a></li>
+<li><a href="https://learn.microsoft.com/azure/architecture/example-scenario/devops/automated-api-deployments-apiops">APIOps guidance</a></li>
+</ul>
 <h2>2. Azure Service Bus</h2>
 <h3>2.1 What It Is</h3>
 <p>Fully managed enterprise message broker supporting <strong>queues</strong> (point-to-point) and <strong>topics/subscriptions</strong> (publish-subscribe). Decouples producers from consumers, providing load-leveling, ordering, and reliable delivery over <strong>AMQP 1.0</strong>.</p>
@@ -403,6 +431,27 @@ footer{border-top:1px solid var(--border);color:var(--muted);text-align:center;p
 <li><strong>Network:</strong> Private endpoints (Premium), service tags, IP firewall, disable public network access.</li>
 </ul>
 <hr />
+<h3>📝 Quick Check — Service Bus</h3>
+<div class="inlinequiz" data-cat="ServiceBus">Interactive quick check available in the web app. Full Q&A with explanations: see the Practice Questions appendix.</div>
+
+<h3>🧊 Whiteboard Challenges — Service Bus</h3>
+<p><strong>W1. An airline's booking system must process seat reservations strictly in order per flight, survive consumer crashes without losing bookings, and never double-charge on retries. Whiteboard the messaging design.</strong></p>
+<blockquote>
+<p><strong>Model answer:</strong> Service Bus <strong>queue with sessions</strong>, <code>SessionId = flightNumber</code> → FIFO per flight while different flights process in parallel (sequential convoy). <strong>Peek-lock</strong> receive with explicit Complete → at-least-once; consumers renew locks for long work. Producer sets deterministic <code>MessageId = bookingId</code> + <strong>duplicate detection</strong> window → idempotent enqueue; consumer-side idempotency (upsert by bookingId) guards double-charging on redelivery. <code>MaxDeliveryCount</code> + <strong>DLQ</strong> with an alerted DLQ processor for poison bookings. Premium tier if private endpoints/zone redundancy are required.</p>
+</blockquote>
+<p><strong>W2. Design the messaging backbone for an e-commerce order flow: order placed → inventory, payments, and email must all react; payment failures must be compensated; invoices are 20 MB PDFs.</strong></p>
+<blockquote>
+<p><strong>Model answer:</strong> Order service publishes to a <strong>topic</strong> <code>orders</code> with three filtered <strong>subscriptions</strong> (inventory, payments, notifications) — pub/sub fan-out, correlation filters on event type. Payment failure triggers a <strong>saga</strong>: compensating messages (release inventory, cancel order) rather than distributed transactions. Invoices use <strong>claim-check</strong>: PDF to Blob Storage, message carries the URI. Email service scales with <strong>competing consumers</strong>; the whole chain is buffered (queue-based load leveling) so Black Friday bursts don't topple payments. Everything authenticated with managed identities + Service Bus data roles.</p>
+</blockquote>
+<h3>📚 Key Resources — Service Bus</h3>
+<ul>
+<li><a href="https://learn.microsoft.com/azure/service-bus-messaging/">Service Bus documentation home</a></li>
+<li><a href="https://learn.microsoft.com/azure/service-bus-messaging/service-bus-queues-topics-subscriptions">Queues, topics &amp; subscriptions concepts</a></li>
+<li><a href="https://learn.microsoft.com/azure/service-bus-messaging/compare-messaging-services">Compare messaging services (SB vs Event Grid vs Event Hubs)</a></li>
+<li><a href="https://learn.microsoft.com/azure/service-bus-messaging/message-sessions">Sessions &amp; FIFO</a></li>
+<li><a href="https://learn.microsoft.com/azure/service-bus-messaging/service-bus-dead-letter-queues">Dead-letter queues</a></li>
+<li><a href="https://learn.microsoft.com/azure/architecture/patterns/category/messaging">Asynchronous messaging patterns (Architecture Center)</a></li>
+</ul>
 <h2>3. Azure RBAC &amp; Governance</h2>
 <h3>3.1 RBAC Fundamentals</h3>
 <p>Azure RBAC = <strong>authorization system</strong> on Azure Resource Manager. An assignment is: <strong>security principal + role definition + scope</strong>.</p>
@@ -520,6 +569,27 @@ footer{border-top:1px solid var(--border);color:var(--muted);text-align:center;p
 </table>
 <p><strong>RBAC vs. Policy:</strong> RBAC controls <em>who</em> can act; Policy controls <em>what/how</em> resources may be configured regardless of who. They complement, not overlap.</p>
 <hr />
+<h3>📝 Quick Check — RBAC &amp; Governance</h3>
+<div class="inlinequiz" data-cat="RBAC">Interactive quick check available in the web app. Full Q&A with explanations: see the Practice Questions appendix.</div>
+
+<h3>🧊 Whiteboard Challenges — RBAC &amp; Governance</h3>
+<p><strong>W1. A 200-subscription enterprise has admins with permanent Owner everywhere and no configuration guardrails. Whiteboard the target governance model and the migration steps.</strong></p>
+<blockquote>
+<p><strong>Model answer:</strong> Draw the <strong>landing zone MG hierarchy</strong>: Root → Platform (identity/connectivity/management) + Landing Zones (corp/online) + Sandbox + Decommissioned. Attach <strong>Policy initiatives</strong> at MG level (allowed regions, required tags, deny public storage, Defender on). Replace standing Owner with <strong>PIM eligible</strong> assignments (approval + MFA + 8h max), Reader as standing access, quarterly <strong>access reviews</strong>; assign everything to <strong>Entra groups</strong>. Break-glass accounts excluded from CA. Migration: inventory assignments → map to groups/roles → move subscriptions under MGs (policies in audit mode first) → flip to enforce → remove direct assignments.</p>
+</blockquote>
+<p><strong>W2. An auditor asks: "Prove that a compromised web app in subscription X could not have read the HR database in subscription Y." Whiteboard your answer using the RBAC model.</strong></p>
+<blockquote>
+<p><strong>Model answer:</strong> Walk the evaluation: the app's <strong>managed identity</strong> has role assignments only at X's resource group scope (least privilege, <code>DataActions</code> on its own storage only). No assignment exists at any scope covering Y — RBAC is <strong>deny-by-default</strong>; effective permissions = union of assignments, and none exist. Add layered evidence: Y's SQL has <strong>private endpoint</strong> + public access disabled (network), requires Entra auth (no SQL logins), and <strong>Policy</strong> denies public exposure. Show the audit trail: <code>az role assignment list</code> at each scope + Entra sign-in logs proving no token was ever issued for Y's resources.</p>
+</blockquote>
+<h3>📚 Key Resources — RBAC &amp; Governance</h3>
+<ul>
+<li><a href="https://learn.microsoft.com/azure/role-based-access-control/">Azure RBAC documentation</a></li>
+<li><a href="https://learn.microsoft.com/azure/role-based-access-control/built-in-roles">Built-in roles reference</a></li>
+<li><a href="https://learn.microsoft.com/azure/governance/policy/">Azure Policy documentation</a></li>
+<li><a href="https://learn.microsoft.com/entra/id-governance/privileged-identity-management/pim-configure">PIM documentation</a></li>
+<li><a href="https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/overview">Managed identities overview</a></li>
+<li><a href="https://learn.microsoft.com/azure/cloud-adoption-framework/ready/landing-zone/">Azure landing zones (CAF)</a></li>
+</ul>
 <h2>4. Cloud Networking</h2>
 <h3>4.1 Virtual Networks</h3>
 <ul>
@@ -620,6 +690,28 @@ footer{border-top:1px solid var(--border);color:var(--muted);text-align:center;p
 <li><strong>Azure DNS Private Resolver:</strong> Managed inbound/outbound endpoints for hybrid DNS (replace DNS-forwarder VMs; conditional forwarding on-prem ↔ Azure).</li>
 </ul>
 <hr />
+<h3>📝 Quick Check — Networking</h3>
+<div class="inlinequiz" data-cat="Networking">Interactive quick check available in the web app. Full Q&A with explanations: see the Practice Questions appendix.</div>
+
+<h3>🧊 Whiteboard Challenges — Networking</h3>
+<p><strong>W1. Whiteboard a hub-spoke network for a company with 2 regions, on-prem ExpressRoute, mandatory egress inspection, and PaaS services that must never be publicly reachable. Label every routing decision.</strong></p>
+<blockquote>
+<p><strong>Model answer:</strong> Per region: hub VNet (Azure Firewall Premium zone-redundant, ER gateway, Bastion, DNS Private Resolver) + workload spokes peered to hub. <strong>UDR 0.0.0.0/0 → firewall</strong> on every spoke subnet (egress inspection); spoke↔spoke also via firewall (peering non-transitive). ER private peering into both hubs, <strong>VPN failover</strong>. PaaS: <strong>private endpoints</strong> in spoke PE-subnets, public access disabled by Policy, <strong>private DNS zones</strong> linked to all VNets, on-prem resolution via Private Resolver inbound endpoint + conditional forwarders. Cross-region: hub-to-hub global peering. Address plan: carve a /16 per region up front.</p>
+</blockquote>
+<p><strong>W2. Your global HTTP app is slow for Asian users and went down during a regional outage last month. Whiteboard the traffic path from user to backend that fixes both, naming each load-balancing layer.</strong></p>
+<blockquote>
+<p><strong>Model answer:</strong> User → <strong>Front Door</strong> (anycast edge nearest the user: TLS termination, caching for static assets, WAF, health-probed <strong>priority/latency routing</strong> across regional origins) → regional <strong>Application Gateway</strong> (WAF_v2, path-based routing, zone-redundant) → AKS/ACA backends across 3 zones (internal <strong>Azure LB</strong> under the ingress). Asia latency: Front Door edge + caching + (optionally) an Asian region origin. Outage: Front Door probes fail → automatic origin failover. Note the exam contrast: Traffic Manager would be DNS-only failover (slower, TTL-bound) and adds no WAF/caching.</p>
+</blockquote>
+<h3>📚 Key Resources — Networking</h3>
+<ul>
+<li><a href="https://learn.microsoft.com/azure/virtual-network/">Virtual network documentation</a></li>
+<li><a href="https://learn.microsoft.com/azure/architecture/networking/architecture/hub-spoke">Hub-spoke reference architecture</a></li>
+<li><a href="https://learn.microsoft.com/azure/private-link/">Private Link &amp; private endpoints</a></li>
+<li><a href="https://learn.microsoft.com/azure/private-link/private-endpoint-dns">Private endpoint DNS integration</a></li>
+<li><a href="https://learn.microsoft.com/azure/architecture/guide/technology-choices/load-balancing-overview">Load-balancing options decision guide</a></li>
+<li><a href="https://learn.microsoft.com/azure/firewall/">Azure Firewall documentation</a></li>
+<li><a href="https://learn.microsoft.com/azure/expressroute/">ExpressRoute documentation</a></li>
+</ul>
 <h2>5. Azure Container Apps (ACA)</h2>
 <h3>5.1 What It Is</h3>
 <p>Serverless container platform built on <strong>AKS + KEDA + Dapr + Envoy</strong> (abstracted away). You bring containers; Azure runs, scales (including <strong>to zero</strong>), and upgrades the infrastructure. No K8s API access — that's the tradeoff vs. AKS.</p>
@@ -668,6 +760,27 @@ footer{border-top:1px solid var(--border);color:var(--muted);text-align:center;p
 <h3>5.4 Typical Enterprise Pattern</h3>
 <p>Front Door (WAF) → APIM (internal) → <strong>Container Apps environment (internal ingress)</strong> running APIs → managed identities → Service Bus / SQL / Key Vault via private endpoints, Dapr pub/sub for async, ACR with private endpoint for images, GitHub Actions/Azure DevOps deploying by revision with canary traffic split.</p>
 <hr />
+<h3>📝 Quick Check — Container Apps</h3>
+<div class="inlinequiz" data-cat="ContainerApps">Interactive quick check available in the web app. Full Q&A with explanations: see the Practice Questions appendix.</div>
+
+<h3>🧊 Whiteboard Challenges — Container Apps</h3>
+<p><strong>W1. A startup with 8 microservices and no Kubernetes skills asks you to design their platform: private APIs, async order processing, nightly reports, minimal idle cost. Whiteboard it on ACA.</strong></p>
+<blockquote>
+<p><strong>Model answer:</strong> One <strong>internal ACA environment</strong> in their VNet (workload profiles). HTTP APIs: internal ingress, <strong>HTTP scale rules</strong>, minReplicas 1 for the customer-facing API (no cold start), 0 for admin APIs. Order worker: <strong>KEDA Service Bus scale rule</strong>, minReplicas 0 — scales with queue depth, free when idle. Nightly reports: <strong>ACA Job</strong> (cron). <strong>Dapr</strong> pub/sub over Service Bus for service-to-service async; managed identity for ACR pulls (AcrPull) and Key Vault references. Exposure: APIM Standard v2 with VNet integration in front. Cost story: scale-to-zero everywhere except one API.</p>
+</blockquote>
+<p><strong>W2. The team wants zero-downtime releases with instant rollback and gradual rollout, without building custom deployment tooling. Whiteboard the release flow on ACA.</strong></p>
+<blockquote>
+<p><strong>Model answer:</strong> Set the app to <strong>multiple revision mode</strong>. Pipeline (GitHub Actions with OIDC federation — no secrets) builds → pushes to ACR → <code>az containerapp update</code> creates revision N+1 → <strong>traffic split</strong> 95/5 → watch App Insights failure rate/latency for the canary label → shift 50/50 → 0/100 → deactivate old revision. Rollback = set traffic 100% to revision N (instant, it's still warm). Draw the revisions as immutable snapshots behind Envoy ingress doing weighted routing. Mention session affinity caveat for stateful clients and health probes gating the new revision.</p>
+</blockquote>
+<h3>📚 Key Resources — Container Apps</h3>
+<ul>
+<li><a href="https://learn.microsoft.com/azure/container-apps/">Container Apps documentation</a></li>
+<li><a href="https://learn.microsoft.com/azure/container-apps/revisions">Revisions &amp; traffic splitting</a></li>
+<li><a href="https://learn.microsoft.com/azure/container-apps/scale-app">Scaling (KEDA rules)</a></li>
+<li><a href="https://learn.microsoft.com/azure/container-apps/dapr-overview">Dapr integration</a></li>
+<li><a href="https://learn.microsoft.com/azure/container-apps/networking">Networking &amp; internal environments</a></li>
+<li><a href="https://learn.microsoft.com/azure/architecture/guide/technology-choices/compute-decision-tree">Compute service decision tree</a></li>
+</ul>
 <h2>6. Authentication &amp; Authorization Patterns (Entra ID)</h2>
 <h3>6.1 Protocol Foundations</h3>
 <ul>
@@ -738,6 +851,28 @@ footer{border-top:1px solid var(--border);color:var(--muted);text-align:center;p
 <li><strong>Zero trust:</strong> verify explicitly (every hop authenticates), least privilege (narrow scopes/roles, PIM), assume breach (segmentation, private networking, logging).</li>
 </ul>
 <hr />
+<h3>📝 Quick Check — Auth &amp; Identity</h3>
+<div class="inlinequiz" data-cat="Auth">Interactive quick check available in the web app. Full Q&A with explanations: see the Practice Questions appendix.</div>
+
+<h3>🧊 Whiteboard Challenges — Auth &amp; Identity</h3>
+<p><strong>W1. Whiteboard the complete token journey when a doctor uses a hospital SPA to view lab results: SPA → API gateway → results API → downstream FHIR API. Name every flow and every validation.</strong></p>
+<blockquote>
+<p><strong>Model answer:</strong> SPA signs the doctor in with <strong>auth code + PKCE</strong> → gets ID token (for the SPA) + access token (audience = results API, scope <code>Results.Read</code>). SPA calls APIM with the bearer token; APIM <strong>validate-jwt</strong> (signature via JWKS, iss, aud, exp, scp claim) rejects at the edge. Results API <strong>re-validates</strong> the token (zero trust), authorizes on <code>scp</code>, then uses <strong>On-Behalf-Of</strong> to exchange it for a FHIR-API token preserving the doctor's identity (audit trail shows the human, not a service account). APIM→backend locked with managed identity/mTLS + internal network. Conditional Access enforced MFA + compliant device at sign-in.</p>
+</blockquote>
+<p><strong>W2. A partner's nightly batch job and your own AKS pods both need to call your inventory API. Whiteboard the identity design with zero stored secrets anywhere.</strong></p>
+<blockquote>
+<p><strong>Model answer:</strong> Expose the API with <strong>app roles</strong> (e.g., <code>Inventory.Sync</code>) — application permissions with admin consent. Partner batch: their workload federates via <strong>workload identity federation</strong> (their cloud/CI token exchanged for your Entra tenant's token; multi-tenant app registration + admin consent) — no shared secret to rotate. AKS pods: <strong>Entra Workload Identity</strong> (federated service accounts) → tokens with <code>roles: Inventory.Sync</code>. API validates signature/iss/aud/exp then authorizes on <code>roles</code> (not <code>scp</code> — no user context). Rotate nothing; revoke by disabling the federated credential or SP. Monitor with sign-in logs per SP.</p>
+</blockquote>
+<h3>📚 Key Resources — Auth &amp; Identity</h3>
+<ul>
+<li><a href="https://learn.microsoft.com/entra/identity-platform/">Microsoft identity platform documentation</a></li>
+<li><a href="https://learn.microsoft.com/entra/identity-platform/v2-oauth2-auth-code-flow">OAuth 2.0 / OIDC flows overview</a></li>
+<li><a href="https://learn.microsoft.com/entra/identity-platform/v2-oauth2-on-behalf-of-flow">On-Behalf-Of flow</a></li>
+<li><a href="https://learn.microsoft.com/entra/workload-id/workload-identity-federation">Workload identity federation</a></li>
+<li><a href="https://learn.microsoft.com/entra/identity/conditional-access/">Conditional Access documentation</a></li>
+<li><a href="https://learn.microsoft.com/security/zero-trust/">Zero Trust guidance center</a></li>
+<li><a href="https://learn.microsoft.com/azure/api-management/validate-jwt-policy">APIM validate-jwt policy</a></li>
+</ul>
 <h2>7. Enterprise API Architecture &amp; Design Patterns</h2>
 <h3>7.1 Reference Architecture (secure enterprise API platform)</h3>
 <pre><code>Internet
@@ -956,6 +1091,27 @@ Hub VNet: Azure Firewall (egress), Bastion, ExpressRoute/VPN, DNS resolver
 </tbody>
 </table>
 <hr />
+<h3>📝 Quick Check — Architecture &amp; Exam</h3>
+<div class="inlinequiz" data-cat="Patterns,Exam">Interactive quick check available in the web app. Full Q&A with explanations: see the Practice Questions appendix.</div>
+
+<h3>🧊 Whiteboard Challenges — Architecture &amp; Patterns</h3>
+<p><strong>W1. Whiteboard the strangler-fig migration of a monolithic insurance system to microservices over 18 months, showing what exists at month 0, 6, and 18.</strong></p>
+<blockquote>
+<p><strong>Model answer:</strong> Month 0: APIM (the facade) routes 100% to the monolith — deploying the gateway first is the key move. Month 6: <code>/claims</code> and <code>/quotes</code> carved out to Container Apps (highest-change, best-bounded contexts first); APIM routes those paths to new services, everything else to the monolith; an <strong>anti-corruption layer</strong> translates legacy models; shared data still in the legacy DB with a sync/change-feed bridge. Month 18: monolith reduced to a residual module or retired; each service owns its store (CQRS where read/write shapes diverge); Service Bus events between services; the facade never changed from the consumer's view — that's the pattern's whole point.</p>
+</blockquote>
+<p><strong>W2. Your CEO asks: "Why does our 99.99% target cost 4× more than 99.9%?" Whiteboard the explanation an architect gives.</strong></p>
+<blockquote>
+<p><strong>Model answer:</strong> Draw the serial chain: FD 99.99 × APIM 99.95 × app 99.95 × SQL 99.99 ≈ <strong>99.88%</strong> — a chain is weaker than its weakest link, so 99.9 is roughly the single-region ceiling. Getting to 99.99 means <strong>parallel redundancy</strong>: zone-redundant everything (small premium) then a second active region (1−(1−A)²) — doubling infrastructure, adding data replication (Cosmos multi-write or SQL FG), global routing, and the ops cost of failover testing. Show the availability ladder vs cost curve and the honest alternative: negotiate the SLO per workload tier — most workloads don't need 99.99.</p>
+</blockquote>
+<h3>📚 Key Resources — Architecture &amp; Patterns</h3>
+<ul>
+<li><a href="https://learn.microsoft.com/azure/architecture/patterns/">Cloud design patterns catalog</a></li>
+<li><a href="https://learn.microsoft.com/azure/well-architected/">Azure Well-Architected Framework</a></li>
+<li><a href="https://learn.microsoft.com/azure/architecture/">Azure Architecture Center (reference architectures)</a></li>
+<li><a href="https://learn.microsoft.com/azure/architecture/microservices/">Microservices on Azure guide</a></li>
+<li><a href="https://learn.microsoft.com/credentials/certifications/resources/study-guides/az-305">AZ-305 study guide (official)</a></li>
+<li><a href="https://learn.microsoft.com/credentials/certifications/exams/az-305/practice/assessment">Free AZ-305 practice assessment</a></li>
+</ul>
 <h2>8. Data Storage Design</h2>
 <h3>8.1 Relational: Azure SQL Family</h3>
 <table>
@@ -1056,6 +1212,28 @@ Hub VNet: Azure Firewall (egress), Bastion, ExpressRoute/VPN, DNS resolver
 </ul>
 <p><strong>Exam lens:</strong> match <em>consistency, latency, scale, query shape, and cost</em> requirements — the cheapest store that satisfies them wins.</p>
 <hr />
+<h3>📝 Quick Check — Data Storage</h3>
+<div class="inlinequiz" data-cat="Data">Interactive quick check available in the web app. Full Q&A with explanations: see the Practice Questions appendix.</div>
+
+<h3>🧊 Whiteboard Challenges — Data Storage</h3>
+<p><strong>W1. A ticketing platform sells globally: 200k reads/sec on event catalogs, strict-consistency seat inventory per venue, and 7-year immutable purchase receipts. Whiteboard the polyglot data design.</strong></p>
+<blockquote>
+<p><strong>Model answer:</strong> Three stores, three jobs. Catalog: <strong>Cosmos DB</strong>, partition key <code>eventId</code>, <strong>Session</strong> consistency, multi-region replicas near users, autoscale RU/s (+ Redis cache-aside for the hottest events). Seat inventory: needs serializable "one seat, one buyer" semantics — <strong>Azure SQL</strong> Business Critical zone-redundant with failover groups, or Cosmos with <strong>Bounded Staleness + optimistic concurrency (ETags)</strong> scoped per venue; justify whichever you pick by the consistency requirement, not fashion. Receipts: <strong>Blob with time-based immutability (WORM)</strong> for 7 years, lifecycle to Archive after 180 days, private endpoints throughout. Close with the exam lens: each requirement named the store.</p>
+</blockquote>
+<p><strong>W2. Your Cosmos bill exploded and p99 latency spiked. The container stores IoT readings with partition key = deviceType (4 values). Whiteboard the diagnosis and the fix, including how you migrate.</strong></p>
+<blockquote>
+<p><strong>Model answer:</strong> Diagnose: 4 logical partitions → <strong>hot partitions</strong>; RU/s divides across physical partitions so the hot one throttles (429s → retries → more RUs), and 20 GB/logical-partition looms. Fix: repartition to high-cardinality key aligned to queries — <code>deviceId</code> (or hierarchical/synthetic key <code>deviceId_day</code> for time-series). Cosmos keys are immutable → <strong>migrate via change feed</strong>: create new container, dual-write or change-feed copy old→new, backfill, cutover reads, retire old. Add autoscale RU/s and TTL on raw readings; consider ADX for long-range analytics instead of hoarding in Cosmos.</p>
+</blockquote>
+<h3>📚 Key Resources — Data Storage</h3>
+<ul>
+<li><a href="https://learn.microsoft.com/azure/azure-sql/">Azure SQL documentation</a></li>
+<li><a href="https://learn.microsoft.com/azure/cosmos-db/">Cosmos DB documentation</a></li>
+<li><a href="https://learn.microsoft.com/azure/cosmos-db/partitioning-overview">Cosmos partitioning guidance</a></li>
+<li><a href="https://learn.microsoft.com/azure/cosmos-db/consistency-levels">Cosmos consistency levels</a></li>
+<li><a href="https://learn.microsoft.com/azure/storage/">Storage account documentation</a></li>
+<li><a href="https://learn.microsoft.com/azure/architecture/guide/technology-choices/data-store-decision-tree">Data store decision guide (Architecture Center)</a></li>
+<li><a href="https://learn.microsoft.com/azure/storage/common/storage-redundancy">Storage redundancy explained</a></li>
+</ul>
 <h2>9. Business Continuity &amp; Disaster Recovery</h2>
 <h3>9.1 Definitions</h3>
 <ul>
@@ -1113,6 +1291,27 @@ Hub VNet: Azure Firewall (egress), Bastion, ExpressRoute/VPN, DNS resolver
 <li><strong>Chaos Studio</strong> for resilience fault-injection experiments.</li>
 </ul>
 <hr />
+<h3>📝 Quick Check — Business Continuity</h3>
+<div class="inlinequiz" data-cat="BCDR">Interactive quick check available in the web app. Full Q&A with explanations: see the Practice Questions appendix.</div>
+
+<h3>🧊 Whiteboard Challenges — Business Continuity</h3>
+<p><strong>W1. The board asks for a DR strategy for 3 workload tiers: payments (RTO 5 min/RPO 0), internal ERP (RTO 4 h/RPO 15 min), archives (RTO 72 h). Whiteboard one slide per tier with services and rough cost logic.</strong></p>
+<blockquote>
+<p><strong>Model answer:</strong> Payments: <strong>active-active</strong> two regions — Cosmos multi-region writes (RPO≈0) or SQL failover groups + zone redundancy everywhere, Front Door health-probe routing; most expensive by far, justified only here. ERP: <strong>warm standby</strong> — ASR-replicated VMs (RPO minutes) + SQL failover group, scaled-down secondary, scripted recovery plan; test failover quarterly; fraction of the cost. Archives: <strong>backup-only</strong> — immutable, GRS-replicated vaults, restore-from-backup meets 72 h; cheapest. Draw the matrix RTO/RPO → pattern → cost; the exam (and the board) reward matching spend to tier, not gold-plating everything.</p>
+</blockquote>
+<p><strong>W2. Ransomware encrypted production AND the attacker had Owner rights for 6 hours. Whiteboard why your backup design still saves the company, control by control.</strong></p>
+<blockquote>
+<p><strong>Model answer:</strong> Walk the attacker's attempts: delete backups → <strong>soft delete</strong> retains them 14+ days; purge the vault → <strong>immutable vault policy</strong> blocks it; disable protection/change policy → <strong>multi-user authorization</strong> demands a second identity via Resource Guard; encrypt data → replication copies it, but <strong>point-in-time restores</strong> predate infection; tamper region-wide → <strong>GRS vault + cross-region restore</strong>. Recovery: isolate, restore to clean point in an isolated subscription, rotate identities (PIM should have prevented 6-hour standing Owner — note it), forensics from immutable Log Analytics export. Lesson line: replication ≠ backup; immutability + MUA + JIT access is the trio.</p>
+</blockquote>
+<h3>📚 Key Resources — Business Continuity</h3>
+<ul>
+<li><a href="https://learn.microsoft.com/azure/backup/">Azure Backup documentation</a></li>
+<li><a href="https://learn.microsoft.com/azure/site-recovery/">Azure Site Recovery documentation</a></li>
+<li><a href="https://learn.microsoft.com/azure/azure-sql/database/auto-failover-group-sql-db">SQL auto-failover groups</a></li>
+<li><a href="https://learn.microsoft.com/azure/well-architected/reliability/">Well-Architected reliability pillar</a></li>
+<li><a href="https://learn.microsoft.com/azure/reliability/">Azure reliability documentation (per-service guides)</a></li>
+<li><a href="https://learn.microsoft.com/azure/backup/security-overview">Backup security features (immutability, MUA)</a></li>
+</ul>
 <h2>10. Monitoring &amp; Observability</h2>
 <h3>10.1 Azure Monitor Stack</h3>
 <ul>
@@ -1147,6 +1346,28 @@ Hub VNet: Azure Firewall (egress), Bastion, ExpressRoute/VPN, DNS resolver
 <li><strong>Network Watcher:</strong> NSG flow logs/VNet flow logs, connection monitor, packet capture, IP flow verify.</li>
 </ul>
 <hr />
+<h3>📝 Quick Check — Monitoring</h3>
+<div class="inlinequiz" data-cat="Monitor">Interactive quick check available in the web app. Full Q&A with explanations: see the Practice Questions appendix.</div>
+
+<h3>🧊 Whiteboard Challenges — Monitoring</h3>
+<p><strong>W1. Whiteboard the observability design for the enterprise API platform (Front Door → APIM → ACA → Service Bus → SQL): what's collected where, and the 5 alerts you'd ship on day one.</strong></p>
+<blockquote>
+<p><strong>Model answer:</strong> One central <strong>Log Analytics workspace</strong>; diagnostic settings on every layer; <strong>App Insights</strong> (workspace-based) on APIM + ACA with <strong>distributed tracing</strong> so one operation ID crosses the whole chain; Service Bus/SQL metrics + logs in. Day-one alerts: (1) availability web test fails from 3 regions; (2) 5xx ratio &gt; 2% over 15 min (log alert); (3) p95 latency breach per API (metric); (4) <strong>Service Bus DLQ depth &gt; 0</strong> — silent DLQs kill order flows; (5) SQL failover/Service Health event. All fire one <strong>action group</strong> (on-call + Teams webhook + auto-runbook where safe). Workbook for the golden signals; cost guarded by table plans + sampling.</p>
+</blockquote>
+<p><strong>W2. A tenant of your multi-tenant SaaS demands access to "their logs only," while your SOC needs everything and Finance wants per-tenant cost attribution. Whiteboard the workspace design.</strong></p>
+<blockquote>
+<p><strong>Model answer:</strong> Keep <strong>one central workspace</strong> (SOC correlation beats fragmentation) — Sentinel on top for the SOC. Tenant access: <strong>resource-context RBAC</strong> — tenants get Reader on their own spoke's resources, so queries auto-scope to their logs; or expose curated <strong>workbooks</strong>/exported views instead of raw workspace access. Finance: enforce a <code>tenantId</code> tag/custom dimension everywhere; usage queries split ingestion by resource/tag for chargeback; per-table retention keeps costs honest. Only split into separate workspaces if a regulator demands physical separation or sovereignty — name that trade-off explicitly.</p>
+</blockquote>
+<h3>📚 Key Resources — Monitoring</h3>
+<ul>
+<li><a href="https://learn.microsoft.com/azure/azure-monitor/">Azure Monitor documentation</a></li>
+<li><a href="https://learn.microsoft.com/azure/azure-monitor/app/app-insights-overview">Application Insights overview</a></li>
+<li><a href="https://learn.microsoft.com/kusto/query/tutorials/learn-common-operators">KQL tutorial</a></li>
+<li><a href="https://learn.microsoft.com/azure/azure-monitor/logs/workspace-design">Log Analytics workspace design</a></li>
+<li><a href="https://learn.microsoft.com/azure/azure-monitor/alerts/alerts-overview">Alerts &amp; action groups</a></li>
+<li><a href="https://learn.microsoft.com/azure/sentinel/">Microsoft Sentinel documentation</a></li>
+<li><a href="https://learn.microsoft.com/azure/defender-for-cloud/">Defender for Cloud documentation</a></li>
+</ul>
 <h2>11. Compute Design (Beyond Containers)</h2>
 <h3>11.1 Full Compute Decision Tree</h3>
 <table>
@@ -1241,6 +1462,27 @@ Hub VNet: Azure Firewall (egress), Bastion, ExpressRoute/VPN, DNS resolver
 <li>Ops: Fleet Manager (multi-cluster), node auto-upgrade channels, Defender for Containers, GitOps via Flux.</li>
 </ul>
 <hr />
+<h3>📝 Quick Check — Compute</h3>
+<div class="inlinequiz" data-cat="Compute">Interactive quick check available in the web app. Full Q&A with explanations: see the Practice Questions appendix.</div>
+
+<h3>🧊 Whiteboard Challenges — Compute</h3>
+<p><strong>W1. Map these five workloads to compute services on a whiteboard, defending each in one sentence: legacy COBOL bridge (Windows, registry hacks), customer web portal, video transcoding batch, 60-microservice platform (K8s team), monthly invoice generation triggered by queue.</strong></p>
+<blockquote>
+<p><strong>Model answer:</strong> COBOL bridge → <strong>VM</strong> (registry/OS control; nothing else allows it) with zones or availability set. Portal → <strong>App Service</strong> (slots, certs, no container requirement). Transcoding → <strong>Batch with Spot VMs</strong> (parallel, interruptible = 90% discount; checkpoint jobs). Microservices with a real K8s team → <strong>AKS</strong> (they'll want CRDs/mesh; without the team it'd be ACA). Invoices → <strong>Functions with Service Bus trigger</strong> (per-execution billing, scale to zero) or ACA Job. Close with the decision tree: control ↔ ops burden, and 'cheapest that meets requirements' as the tiebreak.</p>
+</blockquote>
+<p><strong>W2. Whiteboard the cost optimization review for 300 VMs running 24/7: what do you look at, in what order, and what savings bands do you quote?</strong></p>
+<blockquote>
+<p><strong>Model answer:</strong> Order: (1) <strong>delete zombies</strong> (Advisor idle/unattached disks/IPs — 100% saving); (2) <strong>right-size</strong> overprovisioned SKUs (Advisor CPU/mem data — 30–50%); (3) <strong>schedule</strong> dev/test off-hours (auto-shutdown — ~65% for 8×5 workloads); (4) commit: <strong>reservations</strong> for steady prod (~40–60% at 3-yr) vs <strong>savings plan</strong> where flexibility matters (~30–50%); (5) <strong>Azure Hybrid Benefit</strong> on Windows/SQL (up to ~40% more); (6) refactor candidates → PaaS/containers/Spot for interruptible tiers. Draw the compounding: right-size <em>then</em> reserve — reserving an oversized VM locks in waste. Governance: budgets + cost alerts + tags for ownership.</p>
+</blockquote>
+<h3>📚 Key Resources — Compute</h3>
+<ul>
+<li><a href="https://learn.microsoft.com/azure/architecture/guide/technology-choices/compute-decision-tree">Compute decision tree (Architecture Center)</a></li>
+<li><a href="https://learn.microsoft.com/azure/virtual-machines/">Virtual machines documentation</a></li>
+<li><a href="https://learn.microsoft.com/azure/virtual-machine-scale-sets/">VMSS documentation</a></li>
+<li><a href="https://learn.microsoft.com/azure/azure-functions/functions-scale">Functions hosting options</a></li>
+<li><a href="https://learn.microsoft.com/azure/architecture/reference-architectures/containers/aks/baseline-aks">AKS baseline architecture</a></li>
+<li><a href="https://learn.microsoft.com/azure/cost-management-billing/savings-plan/">Azure reservations &amp; savings plans</a></li>
+</ul>
 <h2>12. Data Integration, Analytics &amp; Migration</h2>
 <h3>12.1 Integration &amp; Analytics Services</h3>
 <table>
@@ -1306,6 +1548,27 @@ Hub VNet: Azure Firewall (egress), Bastion, ExpressRoute/VPN, DNS resolver
 </ul>
 <p>Process (CAF Migrate): assess → replicate/test → migrate (cutover) → optimize (right-size, reservations, PaaS modernization).</p>
 <hr />
+<h3>📝 Quick Check — Migration &amp; Integration</h3>
+<div class="inlinequiz" data-cat="Migration">Interactive quick check available in the web app. Full Q&A with explanations: see the Practice Questions appendix.</div>
+
+<h3>🧊 Whiteboard Challenges — Migration &amp; Integration</h3>
+<p><strong>W1. A retailer must exit its datacenter in 9 months: 400 VMs, 30 SQL Servers, a 500 TB file archive, and one core app the business wants "modernized." Whiteboard the migration waves.</strong></p>
+<blockquote>
+<p><strong>Model answer:</strong> Frame with CAF + the <strong>5 Rs</strong>. Wave 0 (month 1–2): <strong>Azure Migrate</strong> discovery + dependency mapping; build the <strong>landing zone</strong> first. Wave 1: low-risk <strong>rehost</strong> of dev/test + independent apps via Azure Migrate (momentum + learning). Wave 2: SQL via <strong>DMA assess → DMS online</strong> to SQL MI (refactor — instance features preserved, minimal downtime cutovers). Archive: <strong>Data Box</strong> (500 TB over WAN is months; trucks win) → Blob Cool/Archive with lifecycle. Wave 3: core app <strong>rearchitected</strong> to ACA + Service Bus behind APIM using strangler fig — in parallel, not blocking the exit. Wave 4: optimize (right-size, reservations, decommission). Timeline bar with the datacenter exit dependent only on waves 1–2.</p>
+</blockquote>
+<p><strong>W2. Whiteboard the analytics pipeline for a retailer that needs: nightly ETL from 12 on-prem systems, real-time dashboard of store sales, and data scientists exploring 5 years of history.</strong></p>
+<blockquote>
+<p><strong>Model answer:</strong> Ingest: <strong>ADF with self-hosted IR</strong> for the 12 on-prem sources (orchestrated nightly ELT) → <strong>ADLS Gen2</strong> raw/curated zones (medallion). Real-time: store POS events → <strong>Event Hubs</strong> → <strong>Stream Analytics</strong> (windowed aggregates) → Power BI real-time / <strong>Fabric Real-Time Intelligence</strong>. Exploration: <strong>Fabric Lakehouse/OneLake</strong> (or Databricks for heavy Spark/ML) over the same lake — one copy of data, multiple engines. Serving: Fabric Warehouse/semantic model for BI. Governance: Purview lineage, private endpoints, managed identities end-to-end. Name why each service and its exam signal.</p>
+</blockquote>
+<h3>📚 Key Resources — Migration &amp; Integration</h3>
+<ul>
+<li><a href="https://learn.microsoft.com/azure/cloud-adoption-framework/migrate/">Cloud Adoption Framework — Migrate</a></li>
+<li><a href="https://learn.microsoft.com/azure/migrate/">Azure Migrate documentation</a></li>
+<li><a href="https://learn.microsoft.com/azure/dms/">Database Migration Service</a></li>
+<li><a href="https://learn.microsoft.com/azure/data-factory/">Data Factory documentation</a></li>
+<li><a href="https://learn.microsoft.com/fabric/">Microsoft Fabric documentation</a></li>
+<li><a href="https://learn.microsoft.com/azure/databox/">Azure Data Box</a></li>
+</ul>
 <h2>13. Platform Extras: Key Vault, Hybrid, IaC</h2>
 <h3>13.1 Key Vault Deep Dive</h3>
 <ul>
@@ -1335,6 +1598,27 @@ Hub VNet: Azure Firewall (egress), Bastion, ExpressRoute/VPN, DNS resolver
 <li><strong>Azure Load Testing</strong> (Locust/JMeter managed) + <strong>Chaos Studio</strong> = performance and resilience validation in CI/CD.</li>
 </ul>
 <hr />
+<h3>📝 Quick Check — Key Vault, Hybrid &amp; IaC</h3>
+<div class="inlinequiz" data-cat="Auth,RBAC,Patterns">Interactive quick check available in the web app. Full Q&A with explanations: see the Practice Questions appendix.</div>
+
+<h3>🧊 Whiteboard Challenges — Key Vault, Hybrid &amp; IaC</h3>
+<p><strong>W1. Whiteboard the secrets architecture for 40 microservices across dev/test/prod: who can read what, how rotation works, and what an auditor sees.</strong></p>
+<blockquote>
+<p><strong>Model answer:</strong> <strong>Vault-per-app-per-environment</strong> (blast radius) — or at minimum per-team-per-env; all with RBAC model, private endpoints, purge protection. Apps read via <strong>managed identity + Key Vault Secrets User</strong> scoped to their own vault; humans get PIM-eligible Officer roles in prod, standing access only in dev. Most 'secrets' eliminated entirely: managed identities/federation for Azure-to-Azure, so vaults hold only third-party keys + certs. Rotation: Key Vault rotation policies + Event Grid <code>SecretNearExpiry</code> → Function rotates; apps fetch latest version at startup/interval. Config vs secrets: <strong>App Configuration</strong> with KV references. Auditor sees: AuditEvent diagnostic logs per access, RBAC assignments, rotation timestamps.</p>
+</blockquote>
+<p><strong>W2. The platform team deploys by portal-clicking and prod drifts weekly. Whiteboard the target IaC operating model and how you stop the drift — technically, not by policy memo.</strong></p>
+<blockquote>
+<p><strong>Model answer:</strong> Single Git repo of <strong>Bicep modules</strong> (or Terraform) = source of truth; environments as parameter files; PR review + <code>what-if</code> output posted to the PR; pipeline (GitHub Actions, <strong>OIDC federation</strong>, no secrets) promotes dev→test→prod with approvals. Drift is stopped mechanically: deploy via <strong>deployment stacks with denyWriteAndDelete</strong> — portal edits are rejected by the platform, not by memo; developers keep Reader in prod, PIM for break-glass (which the stack still constrains). Detection for the rest: what-if drift checks on schedule + Policy audit. Rollback = redeploy previous commit. Load Testing + Chaos Studio as pipeline gates for the critical paths.</p>
+</blockquote>
+<h3>📚 Key Resources — Key Vault, Hybrid &amp; IaC</h3>
+<ul>
+<li><a href="https://learn.microsoft.com/azure/key-vault/">Key Vault documentation</a></li>
+<li><a href="https://learn.microsoft.com/azure/key-vault/general/best-practices">Key Vault best practices</a></li>
+<li><a href="https://learn.microsoft.com/azure/azure-arc/">Azure Arc documentation</a></li>
+<li><a href="https://learn.microsoft.com/azure/azure-resource-manager/bicep/">Bicep documentation</a></li>
+<li><a href="https://learn.microsoft.com/azure/azure-resource-manager/bicep/deployment-stacks">Deployment stacks</a></li>
+<li><a href="https://learn.microsoft.com/azure/azure-app-configuration/">App Configuration documentation</a></li>
+</ul>
 <h2>14. Concepts Explained Simply (Layman's Corner)</h2>
 <p>Every core concept, explained with an everyday analogy first, then the technical takeaway. If you can explain it this simply to someone else, you understand it.</p>
 <h3>14.1 The API &amp; Messaging World</h3>
@@ -2199,6 +2483,40 @@ document.addEventListener("keydown",e=>{
   if(e.key==="ArrowLeft"){ci=(ci-1+deck.length)%deck.length;showCard()}
 });
 buildDeck(true);
+
+/* ---------- INLINE QUICK CHECKS (after each topic) ---------- */
+document.querySelectorAll(".inlinequiz").forEach(div=>{
+  const cats=div.dataset.cat.split(",");
+  const pool=QUIZ.filter(q=>cats.includes(q.c)&&(!q.t||q.t==="single"));
+  if(!pool.length)return;
+  const start=()=>{
+    const qs=shuffle(pool).slice(0,5);
+    let score=0,done=0;
+    div.innerHTML=qs.map((q,qi)=>{
+      const opts=shuffle(q.o.map((t,i)=>({t,ok:i===q.a})));
+      return `<div class="iq" data-qi="${qi}"><div class="iqq">${qi+1}. ${q.q}</div>`+
+        opts.map((o,i)=>`<button class="opt" data-ok="${o.ok?1:0}">${String.fromCharCode(65+i)}. ${o.t}</button>`).join("")+
+        `<div class="explain"></div></div>`;
+    }).join("")+`<div class="iqscore"></div><button class="btn" style="margin-top:10px" id="iqAgain_${Math.random().toString(36).slice(2)}">↻ New questions</button>`;
+    qs.forEach((q,qi)=>{
+      const box=div.querySelector(`.iq[data-qi="${qi}"]`);
+      const btns=[...box.querySelectorAll(".opt")];
+      btns.forEach(b=>b.addEventListener("click",()=>{
+        btns.forEach(x=>{x.disabled=true;if(x.dataset.ok==="1")x.classList.add("correct")});
+        const right=b.dataset.ok==="1";
+        if(right)score++;else b.classList.add("wrong");
+        const ex=box.querySelector(".explain");
+        ex.innerHTML=(right?"✅ ":"❌ ")+q.e;
+        ex.style.display="block";
+        done++;
+        if(done===qs.length)div.querySelector(".iqscore").textContent=`Quick check score: ${score} / ${qs.length}${score===qs.length?" — perfect! 🎉":score>=Math.ceil(qs.length*0.7)?" — solid, review the misses.":" — reread this section, then retry."}`;
+      }));
+    });
+    div.querySelector("button[id^=iqAgain]").addEventListener("click",start);
+  };
+  div.innerHTML=`<strong>📝 Quick check:</strong> 5 random exam-style questions on this topic (${pool.length} in pool). <button class="btn primary" style="margin-left:8px">Start</button>`;
+  div.querySelector("button").addEventListener("click",start);
+});
 </script>
 </body>
 </html>

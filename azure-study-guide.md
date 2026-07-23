@@ -120,6 +120,32 @@ Policy scopes and evaluation order: **Global → Workspace → Product → API �
 
 ---
 
+
+### 📝 Quick Check — API Management
+
+<div class="inlinequiz" data-cat="APIM">Interactive quick check available in the web app. Full Q&A with explanations: see the Practice Questions appendix.</div>
+
+
+### 🧊 Whiteboard Challenges — APIM
+
+**W1. A bank wants to expose 40 internal APIs to fintech partners with per-partner quotas, OAuth security, and zero public exposure of backends. Sketch the architecture and name the APIM features you'd use.**
+
+> **Model answer:** Front Door Premium (WAF, global TLS) → APIM Premium in **internal VNet mode** → private backends. Partners are onboarded via the **developer portal**; each gets a **subscription** under a partner-tier **product** carrying `quota` and `rate-limit-by-key` policies. `validate-jwt` against Entra ID (client credentials for partner apps) at global scope; `authentication-managed-identity` toward backends; Key Vault-backed **named values** for any residual secrets. Per-partner analytics come free from subscription attribution. Justify Premium: internal VNet + AZ redundancy; everything else would work on Standard v2 with VNet integration if injection weren't needed.
+
+**W2. During Black Friday, one consumer's buggy retry loop takes down the product API for everyone. Whiteboard the layered protections you should have had.**
+
+> **Model answer:** Edge: WAF rate limiting + bot rules. Gateway: `rate-limit-by-key` (keyed on subscription/JWT sub) so one consumer exhausts only their bucket — the **throttling** pattern; `quota` for longer-horizon caps; **circuit breaker** on the backend entity so APIM stops hammering a degraded backend; `retry` policy with backoff only for idempotent GETs. Backend: **bulkhead** — separate ACA revisions/pools per consumer tier; **queue-based load leveling** for writes via Service Bus. Monitoring: alert on 429 ratio per subscription to catch the loop early. Key exam point: 429 the abuser, don't scale to absorb them.
+
+### 📚 Key Resources — APIM
+
+- [APIM documentation home](https://learn.microsoft.com/azure/api-management/)
+- [APIM policy reference (every policy)](https://learn.microsoft.com/azure/api-management/api-management-policies)
+- [APIM tiers & feature comparison](https://learn.microsoft.com/azure/api-management/api-management-features)
+- [APIM VNet integration options](https://learn.microsoft.com/azure/api-management/virtual-network-concepts)
+- [APIM landing zone accelerator (Architecture Center)](https://learn.microsoft.com/azure/architecture/example-scenario/integration/app-gateway-internal-api-management-function)
+- [APIOps guidance](https://learn.microsoft.com/azure/architecture/example-scenario/devops/automated-api-deployments-apiops)
+
+
 ## 2. Azure Service Bus
 
 ### 2.1 What It Is
@@ -192,6 +218,32 @@ Rule of thumb: **events** (fact happened, lightweight) → Event Grid/Event Hubs
 
 ---
 
+
+### 📝 Quick Check — Service Bus
+
+<div class="inlinequiz" data-cat="ServiceBus">Interactive quick check available in the web app. Full Q&A with explanations: see the Practice Questions appendix.</div>
+
+
+### 🧊 Whiteboard Challenges — Service Bus
+
+**W1. An airline's booking system must process seat reservations strictly in order per flight, survive consumer crashes without losing bookings, and never double-charge on retries. Whiteboard the messaging design.**
+
+> **Model answer:** Service Bus **queue with sessions**, `SessionId = flightNumber` → FIFO per flight while different flights process in parallel (sequential convoy). **Peek-lock** receive with explicit Complete → at-least-once; consumers renew locks for long work. Producer sets deterministic `MessageId = bookingId` + **duplicate detection** window → idempotent enqueue; consumer-side idempotency (upsert by bookingId) guards double-charging on redelivery. `MaxDeliveryCount` + **DLQ** with an alerted DLQ processor for poison bookings. Premium tier if private endpoints/zone redundancy are required.
+
+**W2. Design the messaging backbone for an e-commerce order flow: order placed → inventory, payments, and email must all react; payment failures must be compensated; invoices are 20 MB PDFs.**
+
+> **Model answer:** Order service publishes to a **topic** `orders` with three filtered **subscriptions** (inventory, payments, notifications) — pub/sub fan-out, correlation filters on event type. Payment failure triggers a **saga**: compensating messages (release inventory, cancel order) rather than distributed transactions. Invoices use **claim-check**: PDF to Blob Storage, message carries the URI. Email service scales with **competing consumers**; the whole chain is buffered (queue-based load leveling) so Black Friday bursts don't topple payments. Everything authenticated with managed identities + Service Bus data roles.
+
+### 📚 Key Resources — Service Bus
+
+- [Service Bus documentation home](https://learn.microsoft.com/azure/service-bus-messaging/)
+- [Queues, topics & subscriptions concepts](https://learn.microsoft.com/azure/service-bus-messaging/service-bus-queues-topics-subscriptions)
+- [Compare messaging services (SB vs Event Grid vs Event Hubs)](https://learn.microsoft.com/azure/service-bus-messaging/compare-messaging-services)
+- [Sessions & FIFO](https://learn.microsoft.com/azure/service-bus-messaging/message-sessions)
+- [Dead-letter queues](https://learn.microsoft.com/azure/service-bus-messaging/service-bus-dead-letter-queues)
+- [Asynchronous messaging patterns (Architecture Center)](https://learn.microsoft.com/azure/architecture/patterns/category/messaging)
+
+
 ## 3. Azure RBAC & Governance
 
 ### 3.1 RBAC Fundamentals
@@ -261,6 +313,32 @@ Azure RBAC = **authorization system** on Azure Resource Manager. An assignment i
 
 ---
 
+
+### 📝 Quick Check — RBAC & Governance
+
+<div class="inlinequiz" data-cat="RBAC">Interactive quick check available in the web app. Full Q&A with explanations: see the Practice Questions appendix.</div>
+
+
+### 🧊 Whiteboard Challenges — RBAC & Governance
+
+**W1. A 200-subscription enterprise has admins with permanent Owner everywhere and no configuration guardrails. Whiteboard the target governance model and the migration steps.**
+
+> **Model answer:** Draw the **landing zone MG hierarchy**: Root → Platform (identity/connectivity/management) + Landing Zones (corp/online) + Sandbox + Decommissioned. Attach **Policy initiatives** at MG level (allowed regions, required tags, deny public storage, Defender on). Replace standing Owner with **PIM eligible** assignments (approval + MFA + 8h max), Reader as standing access, quarterly **access reviews**; assign everything to **Entra groups**. Break-glass accounts excluded from CA. Migration: inventory assignments → map to groups/roles → move subscriptions under MGs (policies in audit mode first) → flip to enforce → remove direct assignments.
+
+**W2. An auditor asks: "Prove that a compromised web app in subscription X could not have read the HR database in subscription Y." Whiteboard your answer using the RBAC model.**
+
+> **Model answer:** Walk the evaluation: the app's **managed identity** has role assignments only at X's resource group scope (least privilege, `DataActions` on its own storage only). No assignment exists at any scope covering Y — RBAC is **deny-by-default**; effective permissions = union of assignments, and none exist. Add layered evidence: Y's SQL has **private endpoint** + public access disabled (network), requires Entra auth (no SQL logins), and **Policy** denies public exposure. Show the audit trail: `az role assignment list` at each scope + Entra sign-in logs proving no token was ever issued for Y's resources.
+
+### 📚 Key Resources — RBAC & Governance
+
+- [Azure RBAC documentation](https://learn.microsoft.com/azure/role-based-access-control/)
+- [Built-in roles reference](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles)
+- [Azure Policy documentation](https://learn.microsoft.com/azure/governance/policy/)
+- [PIM documentation](https://learn.microsoft.com/entra/id-governance/privileged-identity-management/pim-configure)
+- [Managed identities overview](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/overview)
+- [Azure landing zones (CAF)](https://learn.microsoft.com/azure/cloud-adoption-framework/ready/landing-zone/)
+
+
 ## 4. Cloud Networking
 
 ### 4.1 Virtual Networks
@@ -318,6 +396,33 @@ Combos: **Front Door → App Gateway** (global edge + regional WAF/ingress), **F
 
 ---
 
+
+### 📝 Quick Check — Networking
+
+<div class="inlinequiz" data-cat="Networking">Interactive quick check available in the web app. Full Q&A with explanations: see the Practice Questions appendix.</div>
+
+
+### 🧊 Whiteboard Challenges — Networking
+
+**W1. Whiteboard a hub-spoke network for a company with 2 regions, on-prem ExpressRoute, mandatory egress inspection, and PaaS services that must never be publicly reachable. Label every routing decision.**
+
+> **Model answer:** Per region: hub VNet (Azure Firewall Premium zone-redundant, ER gateway, Bastion, DNS Private Resolver) + workload spokes peered to hub. **UDR 0.0.0.0/0 → firewall** on every spoke subnet (egress inspection); spoke↔spoke also via firewall (peering non-transitive). ER private peering into both hubs, **VPN failover**. PaaS: **private endpoints** in spoke PE-subnets, public access disabled by Policy, **private DNS zones** linked to all VNets, on-prem resolution via Private Resolver inbound endpoint + conditional forwarders. Cross-region: hub-to-hub global peering. Address plan: carve a /16 per region up front.
+
+**W2. Your global HTTP app is slow for Asian users and went down during a regional outage last month. Whiteboard the traffic path from user to backend that fixes both, naming each load-balancing layer.**
+
+> **Model answer:** User → **Front Door** (anycast edge nearest the user: TLS termination, caching for static assets, WAF, health-probed **priority/latency routing** across regional origins) → regional **Application Gateway** (WAF_v2, path-based routing, zone-redundant) → AKS/ACA backends across 3 zones (internal **Azure LB** under the ingress). Asia latency: Front Door edge + caching + (optionally) an Asian region origin. Outage: Front Door probes fail → automatic origin failover. Note the exam contrast: Traffic Manager would be DNS-only failover (slower, TTL-bound) and adds no WAF/caching.
+
+### 📚 Key Resources — Networking
+
+- [Virtual network documentation](https://learn.microsoft.com/azure/virtual-network/)
+- [Hub-spoke reference architecture](https://learn.microsoft.com/azure/architecture/networking/architecture/hub-spoke)
+- [Private Link & private endpoints](https://learn.microsoft.com/azure/private-link/)
+- [Private endpoint DNS integration](https://learn.microsoft.com/azure/private-link/private-endpoint-dns)
+- [Load-balancing options decision guide](https://learn.microsoft.com/azure/architecture/guide/technology-choices/load-balancing-overview)
+- [Azure Firewall documentation](https://learn.microsoft.com/azure/firewall/)
+- [ExpressRoute documentation](https://learn.microsoft.com/azure/expressroute/)
+
+
 ## 5. Azure Container Apps (ACA)
 
 ### 5.1 What It Is
@@ -351,6 +456,32 @@ Front Door (WAF) → APIM (internal) → **Container Apps environment (internal 
 
 
 ---
+
+
+### 📝 Quick Check — Container Apps
+
+<div class="inlinequiz" data-cat="ContainerApps">Interactive quick check available in the web app. Full Q&A with explanations: see the Practice Questions appendix.</div>
+
+
+### 🧊 Whiteboard Challenges — Container Apps
+
+**W1. A startup with 8 microservices and no Kubernetes skills asks you to design their platform: private APIs, async order processing, nightly reports, minimal idle cost. Whiteboard it on ACA.**
+
+> **Model answer:** One **internal ACA environment** in their VNet (workload profiles). HTTP APIs: internal ingress, **HTTP scale rules**, minReplicas 1 for the customer-facing API (no cold start), 0 for admin APIs. Order worker: **KEDA Service Bus scale rule**, minReplicas 0 — scales with queue depth, free when idle. Nightly reports: **ACA Job** (cron). **Dapr** pub/sub over Service Bus for service-to-service async; managed identity for ACR pulls (AcrPull) and Key Vault references. Exposure: APIM Standard v2 with VNet integration in front. Cost story: scale-to-zero everywhere except one API.
+
+**W2. The team wants zero-downtime releases with instant rollback and gradual rollout, without building custom deployment tooling. Whiteboard the release flow on ACA.**
+
+> **Model answer:** Set the app to **multiple revision mode**. Pipeline (GitHub Actions with OIDC federation — no secrets) builds → pushes to ACR → `az containerapp update` creates revision N+1 → **traffic split** 95/5 → watch App Insights failure rate/latency for the canary label → shift 50/50 → 0/100 → deactivate old revision. Rollback = set traffic 100% to revision N (instant, it's still warm). Draw the revisions as immutable snapshots behind Envoy ingress doing weighted routing. Mention session affinity caveat for stateful clients and health probes gating the new revision.
+
+### 📚 Key Resources — Container Apps
+
+- [Container Apps documentation](https://learn.microsoft.com/azure/container-apps/)
+- [Revisions & traffic splitting](https://learn.microsoft.com/azure/container-apps/revisions)
+- [Scaling (KEDA rules)](https://learn.microsoft.com/azure/container-apps/scale-app)
+- [Dapr integration](https://learn.microsoft.com/azure/container-apps/dapr-overview)
+- [Networking & internal environments](https://learn.microsoft.com/azure/container-apps/networking)
+- [Compute service decision tree](https://learn.microsoft.com/azure/architecture/guide/technology-choices/compute-decision-tree)
+
 
 ## 6. Authentication & Authorization Patterns (Entra ID)
 
@@ -399,6 +530,33 @@ Front Door (WAF) → APIM (internal) → **Container Apps environment (internal 
 - **Zero trust:** verify explicitly (every hop authenticates), least privilege (narrow scopes/roles, PIM), assume breach (segmentation, private networking, logging).
 
 ---
+
+
+### 📝 Quick Check — Auth & Identity
+
+<div class="inlinequiz" data-cat="Auth">Interactive quick check available in the web app. Full Q&A with explanations: see the Practice Questions appendix.</div>
+
+
+### 🧊 Whiteboard Challenges — Auth & Identity
+
+**W1. Whiteboard the complete token journey when a doctor uses a hospital SPA to view lab results: SPA → API gateway → results API → downstream FHIR API. Name every flow and every validation.**
+
+> **Model answer:** SPA signs the doctor in with **auth code + PKCE** → gets ID token (for the SPA) + access token (audience = results API, scope `Results.Read`). SPA calls APIM with the bearer token; APIM **validate-jwt** (signature via JWKS, iss, aud, exp, scp claim) rejects at the edge. Results API **re-validates** the token (zero trust), authorizes on `scp`, then uses **On-Behalf-Of** to exchange it for a FHIR-API token preserving the doctor's identity (audit trail shows the human, not a service account). APIM→backend locked with managed identity/mTLS + internal network. Conditional Access enforced MFA + compliant device at sign-in.
+
+**W2. A partner's nightly batch job and your own AKS pods both need to call your inventory API. Whiteboard the identity design with zero stored secrets anywhere.**
+
+> **Model answer:** Expose the API with **app roles** (e.g., `Inventory.Sync`) — application permissions with admin consent. Partner batch: their workload federates via **workload identity federation** (their cloud/CI token exchanged for your Entra tenant's token; multi-tenant app registration + admin consent) — no shared secret to rotate. AKS pods: **Entra Workload Identity** (federated service accounts) → tokens with `roles: Inventory.Sync`. API validates signature/iss/aud/exp then authorizes on `roles` (not `scp` — no user context). Rotate nothing; revoke by disabling the federated credential or SP. Monitor with sign-in logs per SP.
+
+### 📚 Key Resources — Auth & Identity
+
+- [Microsoft identity platform documentation](https://learn.microsoft.com/entra/identity-platform/)
+- [OAuth 2.0 / OIDC flows overview](https://learn.microsoft.com/entra/identity-platform/v2-oauth2-auth-code-flow)
+- [On-Behalf-Of flow](https://learn.microsoft.com/entra/identity-platform/v2-oauth2-on-behalf-of-flow)
+- [Workload identity federation](https://learn.microsoft.com/entra/workload-id/workload-identity-federation)
+- [Conditional Access documentation](https://learn.microsoft.com/entra/identity/conditional-access/)
+- [Zero Trust guidance center](https://learn.microsoft.com/security/zero-trust/)
+- [APIM validate-jwt policy](https://learn.microsoft.com/azure/api-management/validate-jwt-policy)
+
 
 ## 7. Enterprise API Architecture & Design Patterns
 
@@ -517,6 +675,32 @@ Composite SLA math: serial components multiply (99.95% × 99.9% = 99.85%); redun
 
 ---
 
+
+### 📝 Quick Check — Architecture & Exam
+
+<div class="inlinequiz" data-cat="Patterns,Exam">Interactive quick check available in the web app. Full Q&A with explanations: see the Practice Questions appendix.</div>
+
+
+### 🧊 Whiteboard Challenges — Architecture & Patterns
+
+**W1. Whiteboard the strangler-fig migration of a monolithic insurance system to microservices over 18 months, showing what exists at month 0, 6, and 18.**
+
+> **Model answer:** Month 0: APIM (the facade) routes 100% to the monolith — deploying the gateway first is the key move. Month 6: `/claims` and `/quotes` carved out to Container Apps (highest-change, best-bounded contexts first); APIM routes those paths to new services, everything else to the monolith; an **anti-corruption layer** translates legacy models; shared data still in the legacy DB with a sync/change-feed bridge. Month 18: monolith reduced to a residual module or retired; each service owns its store (CQRS where read/write shapes diverge); Service Bus events between services; the facade never changed from the consumer's view — that's the pattern's whole point.
+
+**W2. Your CEO asks: "Why does our 99.99% target cost 4× more than 99.9%?" Whiteboard the explanation an architect gives.**
+
+> **Model answer:** Draw the serial chain: FD 99.99 × APIM 99.95 × app 99.95 × SQL 99.99 ≈ **99.88%** — a chain is weaker than its weakest link, so 99.9 is roughly the single-region ceiling. Getting to 99.99 means **parallel redundancy**: zone-redundant everything (small premium) then a second active region (1−(1−A)²) — doubling infrastructure, adding data replication (Cosmos multi-write or SQL FG), global routing, and the ops cost of failover testing. Show the availability ladder vs cost curve and the honest alternative: negotiate the SLO per workload tier — most workloads don't need 99.99.
+
+### 📚 Key Resources — Architecture & Patterns
+
+- [Cloud design patterns catalog](https://learn.microsoft.com/azure/architecture/patterns/)
+- [Azure Well-Architected Framework](https://learn.microsoft.com/azure/well-architected/)
+- [Azure Architecture Center (reference architectures)](https://learn.microsoft.com/azure/architecture/)
+- [Microservices on Azure guide](https://learn.microsoft.com/azure/architecture/microservices/)
+- [AZ-305 study guide (official)](https://learn.microsoft.com/credentials/certifications/resources/study-guides/az-305)
+- [Free AZ-305 practice assessment](https://learn.microsoft.com/credentials/certifications/exams/az-305/practice/assessment)
+
+
 ## 8. Data Storage Design
 
 ### 8.1 Relational: Azure SQL Family
@@ -583,6 +767,33 @@ Composite SLA math: serial components multiply (99.95% × 99.9% = 99.85%); redun
 
 ---
 
+
+### 📝 Quick Check — Data Storage
+
+<div class="inlinequiz" data-cat="Data">Interactive quick check available in the web app. Full Q&A with explanations: see the Practice Questions appendix.</div>
+
+
+### 🧊 Whiteboard Challenges — Data Storage
+
+**W1. A ticketing platform sells globally: 200k reads/sec on event catalogs, strict-consistency seat inventory per venue, and 7-year immutable purchase receipts. Whiteboard the polyglot data design.**
+
+> **Model answer:** Three stores, three jobs. Catalog: **Cosmos DB**, partition key `eventId`, **Session** consistency, multi-region replicas near users, autoscale RU/s (+ Redis cache-aside for the hottest events). Seat inventory: needs serializable "one seat, one buyer" semantics — **Azure SQL** Business Critical zone-redundant with failover groups, or Cosmos with **Bounded Staleness + optimistic concurrency (ETags)** scoped per venue; justify whichever you pick by the consistency requirement, not fashion. Receipts: **Blob with time-based immutability (WORM)** for 7 years, lifecycle to Archive after 180 days, private endpoints throughout. Close with the exam lens: each requirement named the store.
+
+**W2. Your Cosmos bill exploded and p99 latency spiked. The container stores IoT readings with partition key = deviceType (4 values). Whiteboard the diagnosis and the fix, including how you migrate.**
+
+> **Model answer:** Diagnose: 4 logical partitions → **hot partitions**; RU/s divides across physical partitions so the hot one throttles (429s → retries → more RUs), and 20 GB/logical-partition looms. Fix: repartition to high-cardinality key aligned to queries — `deviceId` (or hierarchical/synthetic key `deviceId_day` for time-series). Cosmos keys are immutable → **migrate via change feed**: create new container, dual-write or change-feed copy old→new, backfill, cutover reads, retire old. Add autoscale RU/s and TTL on raw readings; consider ADX for long-range analytics instead of hoarding in Cosmos.
+
+### 📚 Key Resources — Data Storage
+
+- [Azure SQL documentation](https://learn.microsoft.com/azure/azure-sql/)
+- [Cosmos DB documentation](https://learn.microsoft.com/azure/cosmos-db/)
+- [Cosmos partitioning guidance](https://learn.microsoft.com/azure/cosmos-db/partitioning-overview)
+- [Cosmos consistency levels](https://learn.microsoft.com/azure/cosmos-db/consistency-levels)
+- [Storage account documentation](https://learn.microsoft.com/azure/storage/)
+- [Data store decision guide (Architecture Center)](https://learn.microsoft.com/azure/architecture/guide/technology-choices/data-store-decision-tree)
+- [Storage redundancy explained](https://learn.microsoft.com/azure/storage/common/storage-redundancy)
+
+
 ## 9. Business Continuity & Disaster Recovery
 
 ### 9.1 Definitions
@@ -624,6 +835,32 @@ Composite SLA math: serial components multiply (99.95% × 99.9% = 99.85%); redun
 
 ---
 
+
+### 📝 Quick Check — Business Continuity
+
+<div class="inlinequiz" data-cat="BCDR">Interactive quick check available in the web app. Full Q&A with explanations: see the Practice Questions appendix.</div>
+
+
+### 🧊 Whiteboard Challenges — Business Continuity
+
+**W1. The board asks for a DR strategy for 3 workload tiers: payments (RTO 5 min/RPO 0), internal ERP (RTO 4 h/RPO 15 min), archives (RTO 72 h). Whiteboard one slide per tier with services and rough cost logic.**
+
+> **Model answer:** Payments: **active-active** two regions — Cosmos multi-region writes (RPO≈0) or SQL failover groups + zone redundancy everywhere, Front Door health-probe routing; most expensive by far, justified only here. ERP: **warm standby** — ASR-replicated VMs (RPO minutes) + SQL failover group, scaled-down secondary, scripted recovery plan; test failover quarterly; fraction of the cost. Archives: **backup-only** — immutable, GRS-replicated vaults, restore-from-backup meets 72 h; cheapest. Draw the matrix RTO/RPO → pattern → cost; the exam (and the board) reward matching spend to tier, not gold-plating everything.
+
+**W2. Ransomware encrypted production AND the attacker had Owner rights for 6 hours. Whiteboard why your backup design still saves the company, control by control.**
+
+> **Model answer:** Walk the attacker's attempts: delete backups → **soft delete** retains them 14+ days; purge the vault → **immutable vault policy** blocks it; disable protection/change policy → **multi-user authorization** demands a second identity via Resource Guard; encrypt data → replication copies it, but **point-in-time restores** predate infection; tamper region-wide → **GRS vault + cross-region restore**. Recovery: isolate, restore to clean point in an isolated subscription, rotate identities (PIM should have prevented 6-hour standing Owner — note it), forensics from immutable Log Analytics export. Lesson line: replication ≠ backup; immutability + MUA + JIT access is the trio.
+
+### 📚 Key Resources — Business Continuity
+
+- [Azure Backup documentation](https://learn.microsoft.com/azure/backup/)
+- [Azure Site Recovery documentation](https://learn.microsoft.com/azure/site-recovery/)
+- [SQL auto-failover groups](https://learn.microsoft.com/azure/azure-sql/database/auto-failover-group-sql-db)
+- [Well-Architected reliability pillar](https://learn.microsoft.com/azure/well-architected/reliability/)
+- [Azure reliability documentation (per-service guides)](https://learn.microsoft.com/azure/reliability/)
+- [Backup security features (immutability, MUA)](https://learn.microsoft.com/azure/backup/security-overview)
+
+
 ## 10. Monitoring & Observability
 
 ### 10.1 Azure Monitor Stack
@@ -664,6 +901,33 @@ Know: `where`, `summarize ... by bin()`, `project`, `join`, `render`. AZ-305 tes
 
 
 ---
+
+
+### 📝 Quick Check — Monitoring
+
+<div class="inlinequiz" data-cat="Monitor">Interactive quick check available in the web app. Full Q&A with explanations: see the Practice Questions appendix.</div>
+
+
+### 🧊 Whiteboard Challenges — Monitoring
+
+**W1. Whiteboard the observability design for the enterprise API platform (Front Door → APIM → ACA → Service Bus → SQL): what's collected where, and the 5 alerts you'd ship on day one.**
+
+> **Model answer:** One central **Log Analytics workspace**; diagnostic settings on every layer; **App Insights** (workspace-based) on APIM + ACA with **distributed tracing** so one operation ID crosses the whole chain; Service Bus/SQL metrics + logs in. Day-one alerts: (1) availability web test fails from 3 regions; (2) 5xx ratio > 2% over 15 min (log alert); (3) p95 latency breach per API (metric); (4) **Service Bus DLQ depth > 0** — silent DLQs kill order flows; (5) SQL failover/Service Health event. All fire one **action group** (on-call + Teams webhook + auto-runbook where safe). Workbook for the golden signals; cost guarded by table plans + sampling.
+
+**W2. A tenant of your multi-tenant SaaS demands access to "their logs only," while your SOC needs everything and Finance wants per-tenant cost attribution. Whiteboard the workspace design.**
+
+> **Model answer:** Keep **one central workspace** (SOC correlation beats fragmentation) — Sentinel on top for the SOC. Tenant access: **resource-context RBAC** — tenants get Reader on their own spoke's resources, so queries auto-scope to their logs; or expose curated **workbooks**/exported views instead of raw workspace access. Finance: enforce a `tenantId` tag/custom dimension everywhere; usage queries split ingestion by resource/tag for chargeback; per-table retention keeps costs honest. Only split into separate workspaces if a regulator demands physical separation or sovereignty — name that trade-off explicitly.
+
+### 📚 Key Resources — Monitoring
+
+- [Azure Monitor documentation](https://learn.microsoft.com/azure/azure-monitor/)
+- [Application Insights overview](https://learn.microsoft.com/azure/azure-monitor/app/app-insights-overview)
+- [KQL tutorial](https://learn.microsoft.com/kusto/query/tutorials/learn-common-operators)
+- [Log Analytics workspace design](https://learn.microsoft.com/azure/azure-monitor/logs/workspace-design)
+- [Alerts & action groups](https://learn.microsoft.com/azure/azure-monitor/alerts/alerts-overview)
+- [Microsoft Sentinel documentation](https://learn.microsoft.com/azure/sentinel/)
+- [Defender for Cloud documentation](https://learn.microsoft.com/azure/defender-for-cloud/)
+
 
 ## 11. Compute Design (Beyond Containers)
 
@@ -711,6 +975,32 @@ Triggers/bindings: HTTP, Timer, Service Bus, Event Grid, Event Hubs, Cosmos chan
 
 ---
 
+
+### 📝 Quick Check — Compute
+
+<div class="inlinequiz" data-cat="Compute">Interactive quick check available in the web app. Full Q&A with explanations: see the Practice Questions appendix.</div>
+
+
+### 🧊 Whiteboard Challenges — Compute
+
+**W1. Map these five workloads to compute services on a whiteboard, defending each in one sentence: legacy COBOL bridge (Windows, registry hacks), customer web portal, video transcoding batch, 60-microservice platform (K8s team), monthly invoice generation triggered by queue.**
+
+> **Model answer:** COBOL bridge → **VM** (registry/OS control; nothing else allows it) with zones or availability set. Portal → **App Service** (slots, certs, no container requirement). Transcoding → **Batch with Spot VMs** (parallel, interruptible = 90% discount; checkpoint jobs). Microservices with a real K8s team → **AKS** (they'll want CRDs/mesh; without the team it'd be ACA). Invoices → **Functions with Service Bus trigger** (per-execution billing, scale to zero) or ACA Job. Close with the decision tree: control ↔ ops burden, and 'cheapest that meets requirements' as the tiebreak.
+
+**W2. Whiteboard the cost optimization review for 300 VMs running 24/7: what do you look at, in what order, and what savings bands do you quote?**
+
+> **Model answer:** Order: (1) **delete zombies** (Advisor idle/unattached disks/IPs — 100% saving); (2) **right-size** overprovisioned SKUs (Advisor CPU/mem data — 30–50%); (3) **schedule** dev/test off-hours (auto-shutdown — ~65% for 8×5 workloads); (4) commit: **reservations** for steady prod (~40–60% at 3-yr) vs **savings plan** where flexibility matters (~30–50%); (5) **Azure Hybrid Benefit** on Windows/SQL (up to ~40% more); (6) refactor candidates → PaaS/containers/Spot for interruptible tiers. Draw the compounding: right-size *then* reserve — reserving an oversized VM locks in waste. Governance: budgets + cost alerts + tags for ownership.
+
+### 📚 Key Resources — Compute
+
+- [Compute decision tree (Architecture Center)](https://learn.microsoft.com/azure/architecture/guide/technology-choices/compute-decision-tree)
+- [Virtual machines documentation](https://learn.microsoft.com/azure/virtual-machines/)
+- [VMSS documentation](https://learn.microsoft.com/azure/virtual-machine-scale-sets/)
+- [Functions hosting options](https://learn.microsoft.com/azure/azure-functions/functions-scale)
+- [AKS baseline architecture](https://learn.microsoft.com/azure/architecture/reference-architectures/containers/aks/baseline-aks)
+- [Azure reservations & savings plans](https://learn.microsoft.com/azure/cost-management-billing/savings-plan/)
+
+
 ## 12. Data Integration, Analytics & Migration
 
 ### 12.1 Integration & Analytics Services
@@ -742,6 +1032,32 @@ Logic Apps vs Functions: declarative connector-driven workflows vs code; combine
 Process (CAF Migrate): assess → replicate/test → migrate (cutover) → optimize (right-size, reservations, PaaS modernization).
 
 ---
+
+
+### 📝 Quick Check — Migration & Integration
+
+<div class="inlinequiz" data-cat="Migration">Interactive quick check available in the web app. Full Q&A with explanations: see the Practice Questions appendix.</div>
+
+
+### 🧊 Whiteboard Challenges — Migration & Integration
+
+**W1. A retailer must exit its datacenter in 9 months: 400 VMs, 30 SQL Servers, a 500 TB file archive, and one core app the business wants "modernized." Whiteboard the migration waves.**
+
+> **Model answer:** Frame with CAF + the **5 Rs**. Wave 0 (month 1–2): **Azure Migrate** discovery + dependency mapping; build the **landing zone** first. Wave 1: low-risk **rehost** of dev/test + independent apps via Azure Migrate (momentum + learning). Wave 2: SQL via **DMA assess → DMS online** to SQL MI (refactor — instance features preserved, minimal downtime cutovers). Archive: **Data Box** (500 TB over WAN is months; trucks win) → Blob Cool/Archive with lifecycle. Wave 3: core app **rearchitected** to ACA + Service Bus behind APIM using strangler fig — in parallel, not blocking the exit. Wave 4: optimize (right-size, reservations, decommission). Timeline bar with the datacenter exit dependent only on waves 1–2.
+
+**W2. Whiteboard the analytics pipeline for a retailer that needs: nightly ETL from 12 on-prem systems, real-time dashboard of store sales, and data scientists exploring 5 years of history.**
+
+> **Model answer:** Ingest: **ADF with self-hosted IR** for the 12 on-prem sources (orchestrated nightly ELT) → **ADLS Gen2** raw/curated zones (medallion). Real-time: store POS events → **Event Hubs** → **Stream Analytics** (windowed aggregates) → Power BI real-time / **Fabric Real-Time Intelligence**. Exploration: **Fabric Lakehouse/OneLake** (or Databricks for heavy Spark/ML) over the same lake — one copy of data, multiple engines. Serving: Fabric Warehouse/semantic model for BI. Governance: Purview lineage, private endpoints, managed identities end-to-end. Name why each service and its exam signal.
+
+### 📚 Key Resources — Migration & Integration
+
+- [Cloud Adoption Framework — Migrate](https://learn.microsoft.com/azure/cloud-adoption-framework/migrate/)
+- [Azure Migrate documentation](https://learn.microsoft.com/azure/migrate/)
+- [Database Migration Service](https://learn.microsoft.com/azure/dms/)
+- [Data Factory documentation](https://learn.microsoft.com/azure/data-factory/)
+- [Microsoft Fabric documentation](https://learn.microsoft.com/fabric/)
+- [Azure Data Box](https://learn.microsoft.com/azure/databox/)
+
 
 ## 13. Platform Extras: Key Vault, Hybrid, IaC
 
@@ -775,255 +1091,509 @@ Process (CAF Migrate): assess → replicate/test → migrate (cutover) → optim
 
 ---
 
-## 14. Architecture Walkthroughs (End-to-End Scenarios)
 
-Five named enterprise scenarios in AZ-305 case-study style. For each: requirements → design → justification → failure modes → cost levers.
+### 📝 Quick Check — Key Vault, Hybrid & IaC
 
-### 14.1 FinSecure — Hybrid Identity & Governance (financial services)
+<div class="inlinequiz" data-cat="Auth,RBAC,Patterns">Interactive quick check available in the web app. Full Q&A with explanations: see the Practice Questions appendix.</div>
 
-**Narrative:** FinSecure, a 10,000-employee bank, migrates from on-prem AD to Entra ID. Regulators require MFA for all admins, JIT privileged access, full audit trails, and no standing Owner rights. Budget favors minimal new infrastructure.
 
-```mermaid
-flowchart LR
-  AD[On-prem AD DS] -->|Entra Connect<br/>PHS + seamless SSO| E[Microsoft Entra ID]
-  E --> CA[Conditional Access<br/>MFA, device, risk]
-  E --> PIM[PIM: eligible roles,<br/>approval + MFA]
-  E --> MG[Management groups:<br/>Platform / Workloads / Sandbox]
-  MG --> POL[Azure Policy initiatives<br/>+ Defender for Cloud]
-  E --> LOG[Entra logs → Log Analytics<br/>→ Sentinel]
-```
+### 🧊 Whiteboard Challenges — Key Vault, Hybrid & IaC
 
-**Key decisions & why:**
+**W1. Whiteboard the secrets architecture for 40 microservices across dev/test/prod: who can read what, how rotation works, and what an auditor sees.**
 
-- **Password hash sync (PHS)** over ADFS/PTA: least infrastructure, cloud-resilient sign-in (works even if on-prem is down), leaked-credential detection. ADFS only if regulators mandated on-prem-only auth — they didn't. *Anti-pattern: deploying ADFS farms "because we always federated" — high ops cost, single point of failure.*
-- **Conditional Access baseline:** require MFA for all users (phased), block legacy auth, require compliant devices for admins, sign-in-risk policies via Identity Protection (P2).
-- **PIM** for Entra + Azure roles: eligible (not permanent) assignments, approval for Owner/UAA, max 8-hour activations, quarterly access reviews. Satisfies "no standing privilege."
-- **Management group hierarchy** with policy initiatives (allowed regions, required tags, deny public IPs in workload MGs) — governance inherited, not per-subscription.
-- **Break-glass:** two cloud-only emergency accounts excluded from CA, monitored by alert rules.
+> **Model answer:** **Vault-per-app-per-environment** (blast radius) — or at minimum per-team-per-env; all with RBAC model, private endpoints, purge protection. Apps read via **managed identity + Key Vault Secrets User** scoped to their own vault; humans get PIM-eligible Officer roles in prod, standing access only in dev. Most 'secrets' eliminated entirely: managed identities/federation for Azure-to-Azure, so vaults hold only third-party keys + certs. Rotation: Key Vault rotation policies + Event Grid `SecretNearExpiry` → Function rotates; apps fetch latest version at startup/interval. Config vs secrets: **App Configuration** with KV references. Auditor sees: AuditEvent diagnostic logs per access, RBAC assignments, rotation timestamps.
 
-**Failure modes:** Entra outage → PHS users still authenticate against cached tokens for existing sessions; on-prem outage → cloud auth unaffected (PHS advantage). Credential compromise → risk-based CA blocks + Identity Protection remediation; audit via Sentinel UEBA.
+**W2. The platform team deploys by portal-clicking and prod drifts weekly. Whiteboard the target IaC operating model and how you stop the drift — technically, not by policy memo.**
 
-**Cost:** Entra ID P2 only for admins/high-risk users if licensing is tight; Sentinel data-cap + Basic Logs for verbose tables; no VM infrastructure at all.
+> **Model answer:** Single Git repo of **Bicep modules** (or Terraform) = source of truth; environments as parameter files; PR review + `what-if` output posted to the PR; pipeline (GitHub Actions, **OIDC federation**, no secrets) promotes dev→test→prod with approvals. Drift is stopped mechanically: deploy via **deployment stacks with denyWriteAndDelete** — portal edits are rejected by the platform, not by memo; developers keep Reader in prod, PIM for break-glass (which the stack still constrains). Detection for the rest: what-if drift checks on schedule + Policy audit. Rollback = redeploy previous commit. Load Testing + Chaos Studio as pipeline gates for the critical paths.
 
-### 14.2 ShopSphere — Global Data Platform (e-commerce, GDPR)
+### 📚 Key Resources — Key Vault, Hybrid & IaC
 
-**Narrative:** ShopSphere serves EU + US customers, needs <50 ms product reads globally, EU personal data residency (GDPR), order history analytics, and Black-Friday elasticity.
+- [Key Vault documentation](https://learn.microsoft.com/azure/key-vault/)
+- [Key Vault best practices](https://learn.microsoft.com/azure/key-vault/general/best-practices)
+- [Azure Arc documentation](https://learn.microsoft.com/azure/azure-arc/)
+- [Bicep documentation](https://learn.microsoft.com/azure/azure-resource-manager/bicep/)
+- [Deployment stacks](https://learn.microsoft.com/azure/azure-resource-manager/bicep/deployment-stacks)
+- [App Configuration documentation](https://learn.microsoft.com/azure/azure-app-configuration/)
 
-```mermaid
-flowchart TB
-  FD[Front Door Premium + WAF] --> EUAPP[ACA env — West Europe]
-  FD --> USAPP[ACA env — East US]
-  EUAPP --> COS[(Cosmos DB<br/>multi-region write:<br/>WEU + EUS)]
-  USAPP --> COS
-  EUAPP --> SQLEU[(Azure SQL — WEU<br/>EU PII, failover group → NEU)]
-  COS -->|change feed| EH[Event Hubs] --> DBX[Databricks / Fabric<br/>OneLake analytics]
-  SQLEU --> PURV[Microsoft Purview<br/>classification + lineage]
-```
 
-**Key decisions & why:**
+## 14. Concepts Explained Simply (Layman's Corner)
 
-- **Cosmos DB (session consistency, autoscale RU)** for catalog/cart: global multi-region writes, partition key `/categoryId` rejected for hot partitions → `/productId` synthetic key chosen. *Trap: Strong consistency globally would gut latency — session suffices for cart UX.*
-- **EU PII stays in Azure SQL West Europe** (failover group to North Europe — still EU): satisfies residency; US region gets only pseudonymized order references. Purview classifies and tracks PII lineage.
-- **Change feed → Event Hubs → lakehouse:** analytics decoupled from OLTP; no ETL hammering production stores.
-- **Blob lifecycle:** product images Hot → Cool 30d → delete stale SKUs; invoices → immutable (WORM) container for 10-year retention.
+Every core concept, explained with an everyday analogy first, then the technical takeaway. If you can explain it this simply to someone else, you understand it.
 
-**Failure modes:** Region loss → Front Door health probes fail over compute; Cosmos multi-write continues (RPO≈0); SQL failover group promotes NEU (RPO seconds, EU-compliant). Data corruption → Cosmos continuous backup PITR; SQL PITR 35d + LTR. DDoS → Front Door + DDoS Network Protection.
+### 14.1 The API & Messaging World
 
-**Cost:** Cosmos autoscale absorbs Black Friday (10× scale) without standing capacity; reserved capacity for baseline RUs; ACA scale-to-zero for batch workers; Front Door caching cuts origin egress.
+**API Management = a hotel front desk.** Guests (clients) never wander into the kitchen or laundry room (your backends). They ask the front desk, which checks their room key (subscription key/JWT), enforces house rules (rate limits), answers common questions from memory (caching), and forwards requests to the right department (routing). If the kitchen moves to a new floor, guests never notice — the desk just forwards differently. *Technical takeaway: APIM decouples consumers from backend implementation and centralizes cross-cutting concerns.*
 
-### 14.3 ForgeWorks — Mission-Critical HA/DR (manufacturing, RTO <15 min, RPO <1 h)
+**Rate limit vs quota = highway speed limit vs monthly fuel allowance.** The speed limit (rate-limit) stops you going too fast right now; the fuel allowance (quota) caps total distance this month. You can obey one and still violate the other. *Both throttle, but on different time scales.*
 
-**Narrative:** ForgeWorks runs an MES (VM-based, SQL Server) that stops factory lines when down. Targets: RTO 15 min, RPO 1 h, two regions, constrained budget — active-passive acceptable.
+**Versions vs revisions = new edition of a book vs fixing typos.** A second edition (version) changes the story — readers choose to buy it. A reprint with typo fixes (revision) silently replaces stock — nobody's reading experience breaks.
 
-```mermaid
-flowchart LR
-  subgraph P[Primary — Southeast Asia]
-    VMSS1[App VMs — zone spread] --> SQL1[(SQL MI<br/>Business Critical, ZR)]
-  end
-  subgraph S[Secondary — East Asia]
-    VM2[ASR replicas — cold] -.-> SQL2[(SQL MI geo-secondary)]
-  end
-  TM[Front Door / Traffic Manager<br/>priority routing] --> P
-  TM -.failover.-> S
-  VMSS1 -->|ASR replication| VM2
-  SQL1 -->|auto-failover group| SQL2
-  RSV[Recovery Services vault:<br/>daily backups, immutable]
-```
+**A queue = the deli counter ticket machine.** Customers (messages) take a ticket and wait; any free clerk (competing consumer) serves the next ticket. Nobody is served twice, nobody is skipped, and a lunch rush just makes the line longer instead of crashing the shop (load leveling).
 
-**Key decisions & why:**
+**A topic = a magazine subscription list.** The publisher prints once; every subscriber gets their own copy, and some subscribe only to the sports edition (filters).
 
-- **Zones first, regions second:** zone redundancy (99.99%) handles most incidents cheaply; regional DR reserved for true disasters.
-- **ASR for app VMs** (RPO seconds–minutes, recovery plans boot app tier in order, scripts re-point connection strings) vs. redeploy-from-backup (hours — fails RTO). Secondary compute is *not running* → near-zero standby compute cost.
-- **SQL MI auto-failover group:** listener endpoints mean zero connection-string changes at failover — critical for 15-min RTO. *Anti-pattern: geo-restore-based DR — RTO hours and manual.*
-- **Backup ≠ DR:** immutable vault backups defend against ransomware/corruption, which replication would faithfully copy.
-- **Quarterly test failovers** in isolated VNets, documented runbook, alert-driven (not manual) failover decision tree.
+**Dead-letter queue = the post office's undeliverable-mail shelf.** After several failed delivery attempts, the letter goes on the shelf with a note explaining why — a human investigates instead of the mail carrier retrying forever.
 
-**Failure modes:** Zone loss → transparent (ZR). Region loss → recovery plan: fail over SQL group, ASR boots VMs, Traffic Manager priority flips; measured RTO ~12 min. Ransomware → immutable backups + MUA; restore clean point-in-time.
+**Sessions = a checkout lane dedicated to one family.** All items for order #123 go through the same lane in order, even if other lanes are free. That's FIFO per session key.
 
-**Cost:** ASR charges per protected VM but no running compute; secondary SQL MI is the main standby cost (justified vs. line-stoppage cost); reservations on primary compute; Hybrid Benefit for Windows/SQL licenses.
+**Claim-check = a coat check.** You don't pass a winter coat (10 MB payload) hand-to-hand through the party; you check it and pass a small ticket (blob reference).
 
-### 14.4 CloudNest — Secure Multi-Tenant Hub-Spoke (SaaS, 50 customer environments)
+**Event vs message = a doorbell vs a courier package.** An event ("someone's at the door") is a lightweight fact; whoever cares reacts. A message (the package) is a payload the sender expects someone to process — signature required.
 
-**Narrative:** CloudNest hosts 50 isolated customer environments. Requirements: no tenant-to-tenant traffic, centralized egress inspection/logging, private-only PaaS, per-tenant cost attribution.
+### 14.2 Identity & Access
 
-```mermaid
-flowchart TB
-  subgraph HUB[Hub VNet]
-    FW[Azure Firewall Premium]
-    BAS[Bastion]
-    DNSR[DNS Private Resolver]
-    ER[ExpressRoute + VPN GW]
-  end
-  T1[Spoke: Tenant-001] --> FW
-  T2[Spoke: Tenant-002] --> FW
-  TN[Spoke: Tenant-050] --> FW
-  FW --> NET[Internet egress<br/>TLS inspect + IDPS]
-  T1 --> PE1[Private endpoints:<br/>SQL, Storage, KV]
-  LA[Central Log Analytics<br/>+ Sentinel] -.-> HUB
-```
+**Authentication vs authorization = airport ID check vs boarding pass.** ID proves who you are (authN); the boarding pass proves what you may do — board this flight, this seat, this class (authZ). Both checks happen, in that order.
 
-**Key decisions & why:**
+**Azure RBAC = office keycards.** The card (role assignment) encodes who you are (principal), which doors it opens (role definition), and which building/floor it works in (scope). Facilities gives out cards per team (groups), and the master-key cabinet is behind a sign-out sheet (PIM).
 
-- **Deployment stamps via Bicep module:** each tenant = one spoke VNet + RG + SQL DB (elastic pool) + Key Vault + storage, stamped identically; tags (`tenantId`) drive cost attribution. At 50+ spokes, evaluate **Virtual WAN** for routing scale.
-- **Isolation layers:** peering is hub-spoke only (no spoke-spoke); firewall denies inter-spoke by default; NSGs + ASGs within spokes; deny-public-network Azure Policy on all PaaS; private endpoints + central private DNS zones (linked once, resolved via DNS Private Resolver for on-prem admins).
-- **Egress:** UDR 0.0.0.0/0 → firewall in every spoke (policy-deployed, deny out-of-band edits with deployment stacks); FQDN allow-lists per tenant tier.
-- **Central Log Analytics** with resource-context RBAC → tenants' operators see only their spoke's logs; Sentinel analytics across the estate.
+**PIM = the master-key sign-out sheet.** Nobody carries the master key home. You sign it out with a reason, a manager approves, it auto-returns in 4 hours, and the logbook shows every borrow. *Just-in-time privileged access.*
 
-**Failure modes:** Firewall failure → zone-redundant firewall (99.99%); noisy-neighbor → elastic pool per tier + bulkhead stamps; credential compromise in one tenant → blast radius = one spoke (identity- and network-segmented). DDoS → public entry only via Front Door/App GW with WAF; spokes have zero public IPs.
+**Managed identity = an employee badge issued by the building itself.** The app never carries a password in its wallet; the platform vouches for it. Nothing to steal, rotate, or accidentally commit to GitHub.
 
-**Cost:** Shared hub (firewall/Bastion/gateways amortized across 50 tenants); elastic pools vs. 50 provisioned DBs; Basic Logs for chatty flow logs; firewall as shared cost allocated by tag-based chargeback.
+**OAuth access token = a valet key.** It starts your car and opens the door but not the trunk or glovebox (limited scopes), and it expires. You never hand over your real key (password).
 
-### 14.5 RetailRocket — AKS at Scale with GitOps (retail)
+**On-Behalf-Of = a valet asking the concierge for another valet key.** The restaurant valet (API A) can't use your car key at the parking garage across town (API B); he exchanges it, with proof he acts for you, at the key desk (Entra).
 
-**Narrative:** RetailRocket replatforms 40 microservices to AKS: needs zero-secret deployments, image governance, progressive delivery, and burst scaling for flash sales.
+**Zero trust = a nightclub where every door has a bouncer.** Getting past the front door doesn't get you backstage. Every door re-checks ID (verify explicitly), your wristband only opens what you paid for (least privilege), and cameras run everywhere assuming someone snuck in (assume breach).
 
-```mermaid
-flowchart LR
-  DEV[GitHub repo] -->|OIDC federation<br/>no secrets| GHA[GitHub Actions]
-  GHA -->|build/push| ACR[(ACR Premium<br/>private endpoint, geo-replica)]
-  GHA -->|PR to config repo| CFG[GitOps config repo]
-  FLUX[Flux on AKS] -->|pull + reconcile| CFG
-  subgraph AKS[AKS private cluster]
-    ING[App GW for Containers] --> SVC[Services]
-    SVC --> WI[Workload identity] --> KV[(Key Vault)]
-    KEDA[KEDA + cluster autoscaler<br/>+ Spot node pool]
-  end
-  ACR --> AKS
-  PROM[Managed Prometheus + Grafana<br/>Container Insights]
-```
+**Key Vault = a hotel safe with a logbook.** Valuables (secrets/keys/certs) live in the safe, not under mattresses (config files). Every opening is logged, the safe can't be thrown away while things are inside (purge protection), and staff access it with their badge (managed identity), not a shared combination.
 
-**Key decisions & why:**
+### 14.3 Networking
 
-- **AKS over ACA:** the team needs custom operators, Istio add-on, and node-level tuning (ACA would hide these). Private cluster + authorized IP ranges for the API server.
-- **GitOps (Flux):** cluster state pulled from Git — auditable, reproducible, no kubectl from pipelines. CI builds images; CD = Git merge. *Anti-pattern: pipelines holding cluster-admin kubeconfigs.*
-- **Zero secrets:** GitHub OIDC federation → Entra; workload identity for pods → Key Vault/SQL; ACR pulls via kubelet managed identity + AcrPull; image signing/scanning gates via Defender for Containers + policy (only signed images from trusted ACR).
-- **Scaling:** KEDA on queue depth + HPA; **Spot node pool** for stateless burst with taints/tolerations; cluster autoscaler caps; PodDisruptionBudgets protect availability during scale-in.
-- **Progressive delivery:** canary via ingress traffic weights, automatic rollback on burn-rate alerts (Prometheus SLOs).
+**VNet/subnets = an office floor plan.** The floor (VNet) has rooms (subnets); NSGs are the door badge-readers deciding who may enter each room. ASGs are job-title stickers — "all printers," "all accountants" — so rules say "accountants may reach printers" instead of listing room numbers.
 
-**Failure modes:** Node/zone loss → zone-spread node pools + PDBs; bad release → canary + instant Git revert (GitOps rollback); registry outage → ACR geo-replication; Spot eviction → workloads drain to on-demand pool.
+**Hub-spoke = an airport hub.** Every regional flight (spoke VNet) connects through the hub, where security screening (firewall), customs (gateways), and the control tower (DNS, monitoring) are centralized. Two spokes talking = fly via the hub. Peering being non-transitive = there are no direct flights between small towns.
 
-**Cost:** Spot for burst (~90% off), reservations for baseline node pools, ACR geo-replication only to active regions, right-sized requests/limits via Vertical Pod Autoscaler recommendations, Grafana/Prometheus managed (no self-hosted stack).
+**Private endpoint = a private elevator installed directly into your office.** The public lobby entrance (public endpoint) is bricked over; the service physically appears inside your floor plan with its own room number (private IP). Even people who know the street address (FQDN) get routed to your elevator (private DNS).
+
+**Service endpoint = a staff-only side door — but the building still has a public lobby.** Your subnet gets a trusted path, yet the service keeps its public address. That's why exams prefer private endpoints for "no public exposure."
+
+**ExpressRoute vs VPN = a private rail line vs driving on the public highway in an armored truck.** Both get cargo there safely (encryption), but the rail line (ER) never touches public roads, has guaranteed schedules (SLA), and carries far more freight.
+
+**Front Door vs Application Gateway vs Load Balancer vs Traffic Manager = global concierge vs building receptionist vs elevator dispatcher vs phone directory.** Front Door greets the world at every city (global edge, HTTP). App Gateway manages one building's visitors in detail (regional L7, WAF). Load Balancer just sends people to the next open elevator (L4). Traffic Manager is the directory that tells you which office to call (DNS) — it never sees you walk in.
+
+**WAF = the metal detector at the entrance.** The receptionist (gateway) checks appointments; the metal detector checks for weapons (SQL injection, XSS) regardless of who carries them.
+
+### 14.4 Compute & Containers
+
+**VM vs App Service vs Container Apps vs AKS vs Functions = owning a house vs renting an apartment vs a serviced co-working office vs managing an office tower vs paying per meeting room hour.** More control to the left, less maintenance to the right. The exam gives you a family (requirements) and asks which home fits.
+
+**Scale to zero = motion-sensor lights.** The room is dark (zero cost) until someone walks in; there's a half-second flicker (cold start) as they turn on.
+
+**Revisions with traffic splitting = a restaurant testing a new recipe on 10% of tables.** Complaints? Old recipe returns instantly. Praise? Roll it to every table. That's canary deployment.
+
+**KEDA scaling on queue length = a supermarket opening checkouts when lines grow.** Nobody opens lane 7 because the clock says 5 pm (schedule guessing); they open it because six people are waiting (queue depth — the honest signal).
+
+**Availability zones = keeping spare car keys in different buildings.** A fire in one building (datacenter) can't take out every key. Region pairs = a spare set in another city entirely (regional disaster).
+
+### 14.5 Data & Recovery
+
+**Storage redundancy = photo backups.** LRS: three copies in one shoebox. ZRS: copies in three rooms of the house. GRS: a copy mailed to grandma in another city (but she gets it a few minutes late — async). GZRS: three rooms AND grandma. Choose by asking "what disaster am I paying to survive?"
+
+**Blob tiers = closet / attic / storage unit / bank vault.** Hot: daily clothes in the closet. Cool: winter coats in the attic. Cold: the storage unit across town. Archive: the bank vault — cheap, but retrieving takes hours and an appointment (rehydration).
+
+**Cosmos consistency levels = group-chat message delivery.** Strong: nobody sees a message until everyone can (slow, perfectly synced). Session: *you* always see your own messages instantly (the default sweet spot). Eventual: everyone gets every message eventually, possibly out of order (fastest).
+
+**Partition key = choosing how to file cabinets.** File customer orders by customer ID and lookups are instant; file everything under "2026" and one drawer jams while others sit empty (hot partition).
+
+**RTO vs RPO = "how long until the shop reopens?" vs "how many sales receipts did we lose?"** Two different fears, two different price tags. Every DR design starts by putting numbers on both.
+
+**Backup vs replication = photo album vs a mirror.** The mirror (replication) instantly shows everything — including the ketchup you just spilled on your shirt (corruption/ransomware). The album (backup) lets you go back to before the spill. You need both.
+
+**Site Recovery = a fully furnished second apartment kept in sync.** Disaster strikes; you drive over and the fridge is already stocked (minutes of RTO). Backup alone = rebuilding the apartment from moving boxes (hours/days).
+
+**Composite SLA = a chain of old Christmas lights.** Serial: every extra bulb is one more thing that can kill the whole string (multiply availabilities — they only go down). Parallel: two strings side by side — both must fail for darkness (availability shoots up).
+
+### 14.6 Monitoring & Governance
+
+**Metrics vs logs = the car dashboard vs the trip journal.** The speedometer (metrics) is instant and cheap — great for alarms. The journal (logs) records everything for later questions — "why did we detour on Tuesday?" (KQL).
+
+**Application Insights distributed tracing = a barcode that follows one package end-to-end.** When a customer says "my order vanished," you scan one ID and see every warehouse, truck, and doorstep it touched — across APIM, Container Apps, and Service Bus.
+
+**Azure Policy vs RBAC = building codes vs door keys.** Keys (RBAC) decide who may build; building codes (Policy) decide what anyone may build — no wooden shacks (non-compliant SKUs) even if you own the land.
+
+**Management groups = a family tree for rules.** House rules set by grandparents (root MG) automatically apply to every child and grandchild subscription; teenagers (sandbox subscriptions) get a looser curfew.
+
+**Azure Advisor = a home inspector who visits monthly.** "You're heating an empty room (idle VM), your locks are outdated (security), and your gutters need cleaning before the storm (reliability)."
 
 
 ---
 
-## 15. Hands-On Labs
+## 15. Real-World Architecture Walkthroughs
 
-Six guided labs mapping to exam objectives. Use a free account or MS Learn sandboxes. Each lab ends with a validation checklist and a troubleshooting challenge (three planted faults — answers at the end of each lab).
+Five end-to-end enterprise scenarios. For each: the business context, the design, why each component was chosen, how it fails safely, and where the money is saved.
 
-### Lab 1 — Identity & Governance (RBAC, PIM, Policy)
+### 15.1 FinSecure Bank — Hybrid Identity & Governance (10,000 users)
 
-```bash
-# 1. Create a management-group + policy baseline
-az account management-group create --name "corp-workloads"
-az policy assignment create --name "allowed-locations" \
-  --scope "/providers/Microsoft.Management/managementGroups/corp-workloads" \
-  --policy "e56962a6-4747-49cd-b67b-bf8b01975c4c" \
-  --params '{"listOfAllowedLocations":{"value":["westeurope","northeurope"]}}'
+**Context:** A financial services firm with on-prem Active Directory migrates 10,000 users to the cloud. Regulators demand MFA, auditable privileged access, and least privilege. Budget favors minimal new infrastructure.
 
-# 2. Least-privilege data-plane assignment to a group at RG scope
-az role assignment create --assignee-object-id <groupObjectId> \
-  --assignee-principal-type Group \
-  --role "Storage Blob Data Reader" \
-  --scope "/subscriptions/<sub>/resourceGroups/rg-lab1"
+**Design:**
 
-# 3. Custom role: restart VMs only
-az role definition create --role-definition '{
-  "Name": "VM Restarter", "IsCustom": true,
-  "Actions": ["Microsoft.Compute/virtualMachines/restart/action",
-               "Microsoft.Compute/virtualMachines/read"],
-  "AssignableScopes": ["/subscriptions/<sub>"] }'
+```
+On-prem AD DS ──(Entra Connect: password hash sync)──► Microsoft Entra ID
+                                                          │
+                     Conditional Access policies ─────────┤
+                     (MFA, compliant device, block legacy) │
+                                                          ▼
+   Management group hierarchy: Root ─ Platform ─ Landing Zones ─ Sandbox
+        │ Azure Policy initiatives (allowed regions, required tags, Defender on)
+        │ RBAC via Entra groups; PIM for Owner/Contributor; access reviews quarterly
 ```
 
-**Validate:** deployment to eastus is denied by policy; group member can list blobs but not write; custom role appears with exactly two actions; PIM (portal) shows the role as *eligible*, activation requires MFA + justification.
+**Key decisions & why:**
 
-**Troubleshooting challenge:** a colleague reports: (a) they still can't read blobs despite the assignment; (b) policy isn't blocking eastus deployments in one subscription; (c) the custom role can't be assigned in another subscription.
-**Answers:** (a) waited <10 min for RBAC propagation, or they're using account keys disabled by policy — check `az role assignment list`; (b) that subscription isn't under the `corp-workloads` MG; (c) missing from `AssignableScopes`.
+- **Password hash sync over ADFS/PTA:** cheapest, most resilient (auth works even if on-prem is down), no federation farm to patch. ADFS chosen only when regulators literally forbid hashes in cloud — they rarely do (it syncs a hash *of the hash*).
+- **Conditional Access baseline:** require MFA for all users, block legacy authentication (the #1 password-spray vector), require compliant devices for admins.
+- **PIM with approval + 4-hour activations** for Owner/Contributor/User Access Administrator; standing access is Reader-only. Access reviews auto-remove stale grants.
+- **Break-glass:** two cloud-only emergency accounts, excluded from CA, monitored with alerts on every sign-in.
+- **Governance:** management groups carry policy initiatives so every new subscription lands compliant on day one (landing zone pattern).
 
-### Lab 2 — Hub-Spoke Network with Private Endpoint
+**Failure modes:** On-prem outage → cloud sign-in unaffected (PHS). Entra Connect server dies → sync pauses, auth continues; rebuild from config export. Admin credential theft → CA blocks unknown device, PIM means no standing privilege to steal, audit logs show the attempt.
 
-```bash
-az network vnet create -g rg-net -n vnet-hub --address-prefixes 10.0.0.0/16 \
-  --subnet-name AzureFirewallSubnet --subnet-prefixes 10.0.1.0/26
-az network vnet create -g rg-net -n vnet-spoke1 --address-prefixes 10.1.0.0/16 \
-  --subnet-name snet-app --subnet-prefixes 10.1.1.0/24
-az network vnet peering create -g rg-net -n hub-to-spoke1 \
-  --vnet-name vnet-hub --remote-vnet vnet-spoke1 --allow-vnet-access
-az network vnet peering create -g rg-net -n spoke1-to-hub \
-  --vnet-name vnet-spoke1 --remote-vnet vnet-hub --allow-vnet-access
+**Cost notes:** PHS is free; PIM/CA need Entra ID P2 licenses for admins (scope licenses to who needs them, not all 10,000).
 
-# Private endpoint for a storage account + private DNS
-az storage account create -g rg-net -n stlab2$RANDOM --public-network-access Disabled
-az network private-dns zone create -g rg-net -n privatelink.blob.core.windows.net
-az network private-dns link vnet create -g rg-net -n link-spoke1 \
-  --zone-name privatelink.blob.core.windows.net --virtual-network vnet-spoke1 --registration-enabled false
-az network private-endpoint create -g rg-net -n pe-blob --vnet-name vnet-spoke1 \
-  --subnet snet-app --private-connection-resource-id <storageId> \
-  --group-id blob --connection-name conn-blob
+### 15.2 ShopSphere — Global E-Commerce Data Platform (GDPR)
+
+**Context:** E-commerce across EU + US, 40 ms page-load target, GDPR requires EU customer data to stay in the EU. Catalog reads dominate; orders must never be lost.
+
+**Design:**
+
+```
+Front Door Premium (WAF, caching)
+   ├── EU region: App tier ─ Cosmos DB (catalog, session)  ─ Azure SQL (orders)
+   └── US region: App tier ─ Cosmos DB (replica)           ─ Azure SQL (orders)
+        Cosmos: multi-region write, Session consistency
+        SQL: separate EU/US servers (data residency), zone-redundant, failover groups intra-geo
+        Blob + ADLS Gen2 (EU): clickstream → lifecycle to Cool/Archive
+        Service Bus: order events → fulfillment workers
 ```
 
-**Validate:** `nslookup <account>.blob.core.windows.net` from a spoke VM returns a 10.1.1.x IP; public access attempt returns 403; peering state `Connected` both directions.
+**Key decisions & why:**
 
-**Challenge faults:** (a) nslookup still returns a public IP; (b) spoke1 can't reach a VM in spoke2; (c) VM can't reach the internet after adding a UDR.
-**Answers:** (a) private DNS zone not linked to the querying VNet (or custom DNS servers bypass it); (b) peering is non-transitive — route via hub firewall with UDRs (or peer directly); (c) UDR next-hop firewall exists but firewall has no allow rule / SNAT for that traffic.
+- **Cosmos DB for catalog/session:** global low-latency reads with multi-region writes; **Session consistency** — a shopper always sees their own cart instantly; nobody needs Strong for a product page.
+- **Azure SQL for orders:** money needs ACID transactions and joins. **Residency by architecture:** EU orders live on an EU server, US on US — GDPR compliance by design, not by policy document. Failover groups pair within the same geography (EU→EU) so DR never violates residency.
+- **Partition keys:** catalog by `productId`, cart by `sessionId` — high cardinality, matches queries.
+- **Claim-check + Service Bus:** order-placed messages are small; invoice PDFs go to blob. DLQ monitored with alerts — a silent DLQ is where orders go to die.
+- **Lifecycle policies:** clickstream hot 7 days → Cool 30 → Archive 365 → delete at 730 (GDPR minimization).
 
-### Lab 3 — APIM + Container Apps Enterprise API
+**Failure modes:** Region loss → Front Door reroutes; Cosmos serves writes from surviving region (RPO≈0); SQL failover group promotes secondary within the geo (seconds of data at risk — measured, accepted RPO). WAF absorbs OWASP attacks; rate limiting at APIM protects checkout APIs. Data corruption → SQL PITR (35 days) + Cosmos continuous backup.
+
+**Cost notes:** Cosmos autoscale RU/s (spiky retail traffic), Front Door caching slashes origin egress, Archive tier for clickstream, reserved capacity on the steady-state SQL tiers.
+
+### 15.3 ForgeWorks — Mission-Critical HA/DR (RTO < 15 min, RPO < 1 h)
+
+**Context:** Manufacturing execution system; every hour of downtime stops the production line. Two regions, strict-but-not-zero recovery targets, limited ops team.
+
+**Design:**
+
+```
+Region A (primary, zone-redundant)          Region B (warm standby)
+  App Gateway (WAF, zonal) ◄─── Front Door priority routing ───► App Gateway
+  VMSS across 3 zones (app)                  VMSS min capacity (scaled-down)
+  Azure SQL Business Critical, ZR            Failover group secondary
+  ASR replication: legacy VMs  ──────────►   Replica VMs (test failover quarterly)
+  Recovery Services vault: daily backups, GRS, immutable, cross-region restore
+```
+
+**Key decisions & why:**
+
+- **Zones first, region second:** zone redundancy handles the common failures (single DC) at near-zero design cost; the second region exists only for true regional disaster.
+- **Warm standby sizing:** RTO of 15 min forbids cold rebuild-from-IaC (too slow) but doesn't require full active-active (too expensive). Minimal VMSS capacity in B scales out during failover.
+- **ASR for the legacy VMs** (continuous replication, scripted recovery plans, RPO minutes); **failover groups** for SQL (listener endpoints — the app config never changes). Both comfortably beat the 1-hour RPO.
+- **Backup ≠ DR:** immutable, GRS-replicated backups defend against ransomware — replication alone would faithfully replicate the encryption of your files by an attacker.
+- **Quarterly test failovers** into isolated networks; an untested DR plan is a rumor, not a plan.
+- **Health model:** availability tests + Service Health alerts trigger the documented failover runbook (automated via Automation runbooks; humans approve).
+
+**Failure modes:** Zone loss → transparent (zonal VMSS + ZR SQL). Region loss → Front Door priority flips, VMSS-B scales, SQL FG fails over, ASR recovery plan boots legacy tier in order: measured RTO ~12 min. Ransomware → immutable backups + MUA restore to clean point.
+
+**Cost notes:** Standby VMSS at minimal instance count; reservations on Region A steady compute; Spot for the batch analytics tier; B-series for the rarely-used jump boxes.
+
+### 15.4 CloudGate SaaS — Secure Hub-Spoke for 50 Customer Environments
+
+**Context:** A B2B SaaS provider hosts 50 isolated customer environments. Customers demand tenant isolation evidence; the provider wants centralized egress control, DNS, and logging without 50 copies of everything.
+
+**Design:**
+
+```
+                     Hub VNet
+   Azure Firewall Premium (TLS inspect, IDPS)
+   ExpressRoute + VPN failover gateways
+   Azure Bastion ── Private DNS zones + Private Resolver
+   Central Log Analytics workspace
+        │ peering (non-transitive: all spoke↔spoke via firewall)
+   ┌────┴─────┬──────────┬─ ... ─┐
+ Spoke-C01  Spoke-C02  Spoke-C03  (one VNet per customer)
+   each: app subnet + private endpoints subnet, NSGs, UDR 0.0.0.0/0 → firewall
+   Deployment stamp: Bicep module = VNet + ACA environment + SQL + storage + PEs
+```
+
+**Key decisions & why:**
+
+- **Spoke-per-customer = deployment stamp:** hard network isolation satisfies auditors better than logical row-level isolation; one Bicep module stamps out customer N+1 in minutes.
+- **All traffic through the hub firewall:** UDRs force spoke egress and spoke↔spoke through Firewall Premium — one place for TLS inspection, IDPS, FQDN allow-lists, and one set of logs.
+- **Private endpoints everywhere:** each customer's SQL/storage resolves via central private DNS zones; public access disabled on every PaaS resource. Azure Policy denies public-endpoint creation — governance backs up architecture.
+- **Central Log Analytics with resource-context RBAC:** provider SOC sees everything; a customer-facing support role sees only that customer's resources. Table-level retention keeps firewall logs 90 days, app logs 30.
+- **Scale watch-outs:** peering and UDR limits, firewall SNAT ports, IP address plan (each spoke gets a /24 from a reserved supernet — plan the whole /16 on day one).
+
+**Failure modes:** Firewall is the choke point → deployed zone-redundant; its failure mode is the top availability risk and is monitored accordingly. Compromised customer app → NSGs + firewall rules prevent lateral movement to other spokes; per-spoke managed identities scope blast radius. DDoS → Network Protection plan on hub public IPs.
+
+**Cost notes:** One firewall/gateway/Bastion set shared across 50 customers is the entire point of hub-spoke: isolation without 50× the platform bill. Firewall Premium justified by compliance; logs tiered aggressively.
+
+### 15.5 RetailRun — Kubernetes at Scale with GitOps
+
+**Context:** A retailer runs 60 microservices on AKS. Requirements: no secrets in pipelines or pods, image provenance, zero-downtime deploys, cluster recreatable in hours.
+
+**Design:**
+
+```
+GitHub (app + infra repos)
+   │ OIDC federation (no stored cloud secrets)
+   ▼
+GitHub Actions ── build → scan → push ──► ACR (private endpoint, Defender scans)
+   │                                        ▲ AcrPull via kubelet MI
+   ▼                                        │
+ AKS (private cluster, 3 zones)  ◄── Flux GitOps: cluster state = infra repo
+   ├─ system + user + Spot node pools, cluster autoscaler + KEDA
+   ├─ Entra Workload Identity: pods → Key Vault (CSI driver) / SQL / Service Bus
+   ├─ App Gateway for Containers ingress (WAF)
+   └─ Azure Policy for AKS (no privileged pods, approved registries only)
+```
+
+**Key decisions & why:**
+
+- **GitOps (Flux) over push deploys:** the cluster pulls its desired state from Git — the cluster is cattle; rebuilding = point Flux at the repo. Drift is auto-corrected, and the Git history is the change log auditors ask for.
+- **OIDC federation for CI and Workload Identity for pods:** zero long-lived credentials anywhere in the chain. The pipeline exchanges GitHub's token for Entra tokens; pods exchange service-account tokens the same way.
+- **Private everything:** private API server, ACR behind private endpoint, approved-registry policy — supply chain locked to images you built and scanned.
+- **Zero-downtime:** rolling updates + PodDisruptionBudgets; blue-green at ingress for risky releases; KEDA scales order processors on Service Bus queue depth (scale on the honest signal, not CPU).
+- **Spot node pool** for stateless batch (price-eviction tolerant), tainted so only batch tolerates it.
+
+**Failure modes:** Zone loss → zonal node pools + PDBs keep quorum. Bad deploy → Git revert = rollback. Leaked pipeline? Nothing to leak — federation tokens are minutes-lived. Node compromise → workload identity scopes per-pod, Defender for Containers alerts, network policies limit east-west.
+
+**Cost notes:** Spot pool (~70–90% off) for batch, autoscaler floor low at night, reservations for the steady system pool, ACR Premium only if geo-replication is needed.
+
+
+---
+
+## 16. Hands-On Labs (CLI + Bicep, with Validation & Troubleshooting)
+
+Do these in an Azure free account or MS Learn sandbox. Each lab: goal → commands → validation checklist → a deliberately broken configuration to diagnose. Clean up with `az group delete` after each lab. Replace `$RG`, `$LOC` (e.g., `westeurope`) throughout.
+
+### Lab 1 — APIM: Publish, Protect, and Throttle an API
+
+**Goal:** Front a public demo API with APIM, add a rate limit and JWT validation.
 
 ```bash
-az containerapp env create -g rg-api -n aca-env --location westeurope
-az containerapp create -g rg-api -n orders-api --environment aca-env \
-  --image mcr.microsoft.com/azuredocs/containerapps-helloworld:latest \
-  --ingress internal --target-port 80 --min-replicas 0 --max-replicas 5
+az group create -n $RG -l $LOC
+az apim create -n apim-lab-$RANDOM -g $RG --publisher-email you@example.com \
+  --publisher-name "Lab" --sku-name Consumption      # Consumption = fast + cheap for labs
 
-az apim create -g rg-api -n apim-lab3 --publisher-email you@example.com \
-  --publisher-name Lab --sku-name Developer
-# Import the ACA backend, then apply policy (portal or Bicep):
+# Import a demo OpenAPI backend
+az apim api import -g $RG --service-name <apim-name> --path conference \
+  --specification-url https://conferenceapi.azurewebsites.net?format=json \
+  --specification-format OpenApiJson --api-id conf
 ```
+
+Portal → API → All operations → Inbound policy:
 
 ```xml
 <inbound>
   <base />
-  <validate-jwt header-name="Authorization" failed-validation-httpcode="401">
-    <openid-config url="https://login.microsoftonline.com/<tenant>/v2.0/.well-known/openid-configuration" />
-    <audiences><audience>api://orders-lab</audience></audiences>
-  </validate-jwt>
-  <rate-limit calls="10" renewal-period="60" />
+  <rate-limit-by-key calls="5" renewal-period="30"
+      counter-key="@(context.Request.IpAddress)" />
 </inbound>
 ```
 
-**Validate:** call without token → 401; with valid token → 200; 11th call in a minute → 429; ACA replica count scales 0→N under load (`az containerapp replica list`).
+**Validate:** ☐ Calling the API 6× in 30 s from one IP returns **429** on the 6th. ☐ Trace (Ocp-Apim-Trace) shows the policy firing. ☐ A subscription key is required (or API set to open intentionally).
 
-**Challenge faults:** (a) APIM returns 500 BackendConnectionFailure; (b) valid tokens rejected 401; (c) rate limit never triggers.
-**Answers:** (a) ACA ingress is internal and APIM (Developer, non-VNet) can't reach it — use external ingress for the lab or VNet-injected APIM; (b) audience mismatch (token `aud` ≠ policy audience) or wrong tenant in openid-config; (c) policy applied at wrong scope / `<base/>` order swallows it, or calls use different subscription keys (counter is per key).
+**Troubleshoot this:** A teammate reports every caller shares one rate-limit bucket. *Find 3 issues:* (1) `rate-limit` used instead of `rate-limit-by-key`; (2) counter-key set to a constant string; (3) policy placed at product scope after `<base/>` of an API that already short-circuits with `return-response`. 
 
-### Lab 4 — Data: SQL Failover Group + Storage Lifecycle
+### Lab 2 — Service Bus: Queues, DLQ, and Sessions
 
 ```bash
-az sql server create -g rg-data -n sqllab4-pri -l westeurope -u azadmin -p '<pwd>'
-az sql server create -g rg-data -n sqllab4-sec -l northeurope -u azadmin -p '<pwd>'
-az sql db create -g rg-data -s sqllab4-pri -n appdb --service-objective S0
-az sql failover-group create -g rg-data -s sqllab4-pri -n fg-lab4 \
-  --partner-server sqllab4-sec --add-db appdb --failover-policy Automatic --grace-period 1
+az servicebus namespace create -n sb-lab-$RANDOM -g $RG -l $LOC --sku Standard
+az servicebus queue create -n orders -g $RG --namespace-name <ns> \
+  --max-delivery-count 3 --enable-dead-lettering-on-message-expiration true \
+  --default-message-time-to-live PT5M
+az servicebus queue create -n orders-fifo -g $RG --namespace-name <ns> \
+  --enable-session true
+# Send/receive without keys: assign yourself data roles
+az role assignment create --assignee <your-upn> \
+  --role "Azure Service Bus Data Owner" --scope <namespace-resource-id>
+```
+
+Send test messages with the portal's Service Bus Explorer: send 1 message, receive in **peek-lock** and abandon it 3 times.
+
+**Validate:** ☐ After 3 abandons the message appears in the **DLQ** with reason `MaxDeliveryCountExceeded`. ☐ Messages sent to `orders-fifo` without a SessionId are rejected. ☐ Two messages with SessionId `A` are received in order.
+
+**Troubleshoot this:** Consumers process duplicates and messages vanish under load. *Find 3 issues:* (1) receive-and-delete mode used, so crashes lose messages; (2) lock duration 30 s but processing takes 90 s with no lock renewal → redelivery duplicates; (3) TTL 5 min silently expires backlog — no one monitors the DLQ.
+
+### Lab 3 — RBAC & Managed Identity: Zero-Secret Storage Access
+
+```bash
+az group create -n $RG -l $LOC
+az storage account create -n stlab$RANDOM -g $RG --sku Standard_LRS --min-tls-version TLS1_2
+az vm create -n vm-lab -g $RG --image Ubuntu2204 --size Standard_B1s \
+  --assign-identity --generate-ssh-keys           # system-assigned MI
+
+# Grant ONLY data-plane read at container scope (least privilege)
+az role assignment create \
+  --assignee <vm-principal-id> \
+  --role "Storage Blob Data Reader" \
+  --scope "<storage-id>/blobServices/default/containers/docs"
+```
+
+On the VM: get a token from IMDS and read a blob — no keys anywhere:
+
+```bash
+curl -s 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://storage.azure.com/' -H Metadata:true
+```
+
+**Validate:** ☐ Blob GET with the token succeeds. ☐ Blob PUT fails (Reader ≠ Contributor). ☐ `az role assignment list --scope <storage-id>` shows no broader grants. ☐ Storage account keys were never used.
+
+**Troubleshoot this:** The app on the VM gets 403s. *Find 3 issues:* (1) role assigned at the wrong scope (another container); (2) role is Reader (control plane) not Storage Blob **Data** Reader; (3) token requested for the wrong resource/audience (`https://management.azure.com/`).
+
+### Lab 4 — Hub-Spoke with Private Endpoint & Private DNS
+
+```bash
+az network vnet create -n vnet-hub -g $RG --address-prefix 10.0.0.0/16 -l $LOC \
+  --subnet-name AzureFirewallSubnet --subnet-prefix 10.0.1.0/26
+az network vnet create -n vnet-spoke -g $RG --address-prefix 10.1.0.0/16 -l $LOC \
+  --subnet-name app --subnet-prefix 10.1.1.0/24
+az network vnet peering create -n hub-to-spoke -g $RG --vnet-name vnet-hub \
+  --remote-vnet vnet-spoke --allow-vnet-access
+az network vnet peering create -n spoke-to-hub -g $RG --vnet-name vnet-spoke \
+  --remote-vnet vnet-hub --allow-vnet-access
+
+# Private endpoint for a storage account into the spoke
+az storage account create -n stpe$RANDOM -g $RG --public-network-access Disabled
+az network private-endpoint create -n pe-blob -g $RG --vnet-name vnet-spoke \
+  --subnet app --connection-name blobconn \
+  --private-connection-resource-id <storage-id> --group-id blob
+az network private-dns zone create -g $RG -n privatelink.blob.core.windows.net
+az network private-dns link vnet create -g $RG -n link-spoke \
+  --zone-name privatelink.blob.core.windows.net --virtual-network vnet-spoke \
+  --registration-enabled false
+az network private-endpoint dns-zone-group create -g $RG \
+  --endpoint-name pe-blob -n zg --private-dns-zone privatelink.blob.core.windows.net \
+  --zone-name blob
+```
+
+**Validate:** ☐ From a VM in the spoke, `nslookup <account>.blob.core.windows.net` returns a **10.1.1.x** address. ☐ Blob access works from the VNet, fails from the internet. ☐ Peering state shows **Connected** both ways.
+
+**Troubleshoot this:** VM resolves the storage FQDN to a public IP. *Find 3 issues:* (1) private DNS zone not linked to the VM's VNet; (2) DNS zone group missing so no A record was created; (3) VM uses custom DNS servers that don't forward to Azure DNS (168.63.129.16).
+
+### Lab 5 — Container Apps: Revisions, Traffic Split, KEDA Scale on Service Bus
+
+```bash
+az containerapp env create -n aca-env -g $RG -l $LOC
+az containerapp create -n web -g $RG --environment aca-env \
+  --image mcr.microsoft.com/k8se/quickstart:latest \
+  --ingress external --target-port 80 \
+  --min-replicas 0 --max-replicas 5 --revisions-mode multiple
+
+# New revision + canary
+az containerapp update -n web -g $RG --set-env-vars VERSION=v2
+az containerapp ingress traffic set -n web -g $RG \
+  --revision-weight <rev1>=90 <rev2>=10
+
+# Scale a worker on queue length
+az containerapp create -n worker -g $RG --environment aca-env \
+  --image <your-worker-image> --min-replicas 0 --max-replicas 10 \
+  --scale-rule-name sbqueue --scale-rule-type azure-servicebus \
+  --scale-rule-metadata queueName=orders namespace=<ns> messageCount=5 \
+  --scale-rule-auth connection=sb-conn --secrets sb-conn=<connection-string>
+```
+
+**Validate:** ☐ `az containerapp revision list` shows two revisions with 90/10 weights; ~10% of curls return v2. ☐ With 0 messages the worker shows **0 replicas**; enqueue 50 messages → replicas grow; drain → back to 0. ☐ App scales to zero after idle (check replica count, note the cold-start on next request).
+
+**Troubleshoot this:** The canary never receives traffic and the worker never scales. *Find 3 issues:* (1) app left in **single** revision mode so weights are ignored; (2) scale rule references the wrong queue name; (3) min-replicas set to 1 masks scale-to-zero claims while the KEDA auth secret is invalid (check `az containerapp logs`).
+
+### Lab 6 — Entra ID: Protect an API with App Roles (validate-jwt end-to-end)
+
+```bash
+# API app registration exposing a role
+az ad app create --display-name orders-api
+az ad app update --id <api-app-id> --identifier-uris api://orders-api
+# add appRole "Orders.Read" via portal (Manifest) or Graph
+# Client credentials grant for a daemon client:
+az ad app create --display-name orders-client
+az ad app credential reset --id <client-app-id>       # secret for lab only
+# Admin-consent the client's application permission to Orders.Read
+```
+
+Get a token and inspect it:
+
+```bash
+curl -X POST https://login.microsoftonline.com/<tenant>/oauth2/v2.0/token \
+  -d "client_id=<client-app-id>&client_secret=<secret>" \
+  -d "grant_type=client_credentials&scope=api://orders-api/.default"
+# paste access_token into jwt.ms → check aud + roles claims
+```
+
+Then attach the `validate-jwt` policy from §1.4 to the Lab 1 APIM API requiring `roles` contains `Orders.Read`.
+
+**Validate:** ☐ Token shows `aud: api://orders-api` and `roles: ["Orders.Read"]`. ☐ APIM returns 401 with no/expired token, 401 with wrong audience, 200 with the right one. ☐ In real projects the client uses **managed identity/federation**, not the lab secret.
+
+**Troubleshoot this:** Every token is rejected with 401. *Find 3 issues:* (1) policy audience checks the client app ID instead of the API's; (2) openid-config URL uses the wrong tenant; (3) client requested `scope=api://orders-api/Orders.Read` with client_credentials — app-only flows must use `/.default`.
+
+### Lab 7 — Backup & DR Drill: SQL PITR + Storage Recovery
+
+```bash
+az sql server create -n sql-lab-$RANDOM -g $RG -l $LOC -u labadmin -p '<strong-pw>'
+az sql db create -n appdb -g $RG -s <server> --service-objective GP_S_Gen5_1 \
+  --backup-storage-redundancy Zone
+# create a table, insert rows, note the time, then DROP the table (the "disaster")
+az sql db restore -g $RG -s <server> -n appdb --dest-name appdb-restored \
+  --time "2026-07-17T10:30:00Z"                      # restore to before the drop
+```
+
+Storage protection drill:
+
+```bash
+az storage account blob-service-properties update -n <account> -g $RG \
+  --enable-delete-retention true --delete-retention-days 7 \
+  --enable-versioning true
+# upload a blob, overwrite it, delete it — then recover both the version and the deleted blob
+```
+
+**Validate:** ☐ Restored DB contains the dropped table (restore is to a **new** database — plan the app cutover). ☐ Deleted blob is recoverable within retention; the pre-overwrite version restores. ☐ You know your measured RTO for this restore — write it down; that number *is* your DR documentation.
+
+**Troubleshoot this:** A real incident recovers nothing. *Find 3 issues:* (1) soft delete enabled *after* the deletion happened; (2) restore attempted to the same DB name (unsupported) losing time; (3) retention 7 days but the corruption was noticed on day 9 — retention must exceed detection time.
+
+### Lab 8 — IaC: Bicep + Deployment Stack with Deny Settings
+
+```bicep
+// main.bicep — a governed stamp
+param location string = resourceGroup().location
+resource sa 'Microsoft.Storage/storageAccounts@2023-05-01' = {
+  name: 'stack${uniqueString(resourceGroup().id)}'
+  location: location
+  sku: { name: 'Standard_ZRS' }
+  kind: 'StorageV2'
+  properties: { minimumTlsVersion: 'TLS1_2', allowBlobPublicAccess: false }
+}
+```
+
+```bash
+az deployment group what-if -g $RG --template-file main.bicep    # preview first
+az stack group create -n lab-stack -g $RG --template-file main.bicep \
+  --deny-settings-mode denyWriteAndDelete --action-on-unmanage deleteResources
+# Now try to change the account in the portal → blocked by the stack's deny assignment
+```
+
+**Validate:** ☐ `what-if` showed the plan before deploy. ☐ Portal edit of the storage account is denied. ☐ Removing the resource from the template and updating the stack deletes it (managed lifecycle). ☐ `az stack group show` lists managed resources.
+
+**Troubleshoot this:** Drift keeps appearing in prod. *Find 3 issues:* (1) stack created with `--deny-settings-mode none`; (2) an Owner is in the deny-settings excluded principals; (3) hotfixes applied in the portal instead of via the pipeline — the process, not the tool, is broken.
+
+### Lab 9 — SQL Failover Group + Storage Lifecycle
+
+```bash
+az sql server create -g rg-data -n sqllab9-pri -l westeurope -u azadmin -p '<pwd>'
+az sql server create -g rg-data -n sqllab9-sec -l northeurope -u azadmin -p '<pwd>'
+az sql db create -g rg-data -s sqllab9-pri -n appdb --service-objective S0
+az sql failover-group create -g rg-data -s sqllab9-pri -n fg-lab9 \
+  --partner-server sqllab9-sec --add-db appdb --failover-policy Automatic --grace-period 1
 
 # Storage lifecycle: cool after 30d, archive 90d, delete 365d
 az storage account management-policy create --account-name <acct> -g rg-data --policy '{
@@ -1035,36 +1605,16 @@ az storage account management-policy create --account-name <acct> -g rg-data --p
     "delete":{"daysAfterModificationGreaterThan":365}}}}}]}'
 ```
 
-**Validate:** connect via `fg-lab4.database.windows.net` (listener, not server name); `az sql failover-group set-primary` on the secondary completes and the same connection string still works; lifecycle policy shows in `az storage account management-policy show`.
+**Validate:** ☐ Connect via `fg-lab9.database.windows.net` (the listener, not the server name). ☐ `az sql failover-group set-primary` on the secondary completes and the same connection string still works. ☐ Lifecycle policy appears in `az storage account management-policy show`.
 
-**Challenge faults:** (a) app breaks after failover; (b) blobs never move to Cool; (c) archive blob read fails.
-**Answers:** (a) app connects to `sqllab4-pri...` directly instead of the failover-group listener; (b) last-modified dates too recent / policy runs ~daily — wait a cycle, or filters exclude the container prefix; (c) archived blobs must be rehydrated before read — that's by design.
+**Troubleshoot this:** (a) the app breaks after failover; (b) blobs never move to Cool; (c) reading an archived blob fails. *Answers:* (a) the app connects to `sqllab9-pri...` directly instead of the failover-group listener; (b) last-modified dates too recent / the policy runs ~daily — wait a cycle, or filters exclude the container prefix; (c) archived blobs must be rehydrated before read — that's by design.
 
-### Lab 5 — Backup & DR Drill
-
-```bash
-az backup vault create -g rg-bcdr -n rsv-lab5 -l westeurope
-az backup vault backup-properties set -n rsv-lab5 -g rg-bcdr \
-  --backup-storage-redundancy GeoRedundant --soft-delete-feature-state Enable
-az backup protection enable-for-vm -g rg-bcdr -v rsv-lab5 \
-  --vm <vmId> --policy-name DefaultPolicy
-az backup protection backup-now -g rg-bcdr -v rsv-lab5 \
-  -c <containerName> -i <itemName> --retain-until 01-01-2027
-```
-
-Then (portal): enable ASR replication for the VM to a secondary region, build a recovery plan, and run a **test failover** into an isolated VNet.
-
-**Validate:** restore point exists; test-failover VM boots in the isolated VNet with no production impact; cleanup test failover completes; deleting a backup leaves it recoverable (soft delete).
-
-**Challenge faults:** (a) backup-now fails with UserErrorGuestAgentStatusUnavailable; (b) test failover VM has no network; (c) restored VM in secondary can't be reached via original DNS name.
-**Answers:** (a) VM agent not running/outdated in the guest; (b) recovery plan/test failover not mapped to the isolated test VNet; (c) DNS still points at primary — failover runbooks must update DNS (or use Traffic Manager/Front Door).
-
-### Lab 6 — Monitoring & Alerting
+### Lab 10 — Monitoring & Alerting
 
 ```bash
-az monitor log-analytics workspace create -g rg-mon -n law-lab6
-az monitor diag-settings create --resource <apimOrAppResourceId> -n ds-lab6 \
-  --workspace law-lab6 --logs '[{"categoryGroup":"allLogs","enabled":true}]' \
+az monitor log-analytics workspace create -g rg-mon -n law-lab10
+az monitor diag-settings create --resource <apimOrAppResourceId> -n ds-lab10 \
+  --workspace law-lab10 --logs '[{"categoryGroup":"allLogs","enabled":true}]' \
   --metrics '[{"category":"AllMetrics","enabled":true}]'
 az monitor action-group create -g rg-mon -n ag-oncall --short-name oncall \
   --action email admin you@example.com
@@ -1074,21 +1624,24 @@ az monitor scheduled-query create -g rg-mon -n alert-5xx \
   --evaluation-frequency 5m --window-size 15m --action-groups ag-oncall
 ```
 
-**Validate:** KQL `requests | summarize count() by resultCode` returns data; forced failures trigger the alert and the email arrives; App Insights Application Map shows the dependency chain.
+**Validate:** ☐ KQL `requests | summarize count() by resultCode` returns data. ☐ Forced failures trigger the alert and the email arrives. ☐ App Insights Application Map shows the dependency chain.
 
-**Challenge faults:** (a) no data in the workspace; (b) alert never fires though failures occur; (c) workspace cost spikes.
-**Answers:** (a) diagnostic settings missing/pointed elsewhere, or 5–10 min ingestion latency; (b) query window/frequency mismatch or threshold too high — test the KQL manually first; (c) verbose categories (e.g., allLogs on chatty resources) — switch tables to Basic plan, add sampling, set daily cap.
+**Troubleshoot this:** (a) no data in the workspace; (b) the alert never fires though failures occur; (c) workspace cost spikes. *Answers:* (a) diagnostic settings missing/pointed elsewhere, or 5–10 min ingestion latency; (b) query window/frequency mismatch or threshold too high — test the KQL manually first; (c) verbose categories (allLogs on chatty resources) — switch tables to Basic plan, add sampling, set a daily cap.
 
 > **Capstone:** rebuild the §7.1 reference architecture end-to-end with Bicep + GitHub Actions OIDC. If you can explain every resource's purpose to a colleague, you're exam-ready for the design questions.
 
+> **Lab habit for the exam:** after every lab ask the AZ-305 question — *"which requirement (cost, RTO, isolation, least privilege) did each flag serve?"* The exam tests the why, not the syntax.
+
+
+
 ---
 
-## 16. One-Page Cheat Sheets
+## 17. One-Page Cheat Sheets
 
-### 16.1 Identity & Security
+### 17.1 Identity & Security
 
 | Need | Answer |
-|---|---|
+| --- | --- |
 | User sign-in flow (web/SPA/mobile) | Auth code + PKCE |
 | Daemon | Client credentials (cert/MI/federation > secret) |
 | API → downstream API as user | On-Behalf-Of |
@@ -1100,10 +1653,10 @@ az monitor scheduled-query create -g rg-mon -n alert-5xx \
 | Delegated vs app permissions | `scp` claim vs `roles` claim; app perms need admin consent |
 | Secrets/keys/certs | Key Vault (RBAC model, soft delete + purge protection, PE); FIPS L3 → Managed HSM |
 
-### 16.2 Storage & Data
+### 17.2 Storage & Data
 
 | Need | Answer |
-|---|---|
+| --- | --- |
 | Redundancy ladder | LRS → ZRS → GRS/RA-GRS → GZRS/RA-GZRS |
 | Tiers | Hot / Cool(30d) / Cold(90d) / Archive(180d, offline) + lifecycle policies |
 | WORM compliance | Immutable storage (time-based / legal hold) |
@@ -1116,10 +1669,10 @@ az monitor scheduled-query create -g rg-mon -n alert-5xx \
 | Cache | Azure Cache for Redis (cache-aside) |
 | Telemetry analytics (KQL) | Azure Data Explorer / Fabric RTI |
 
-### 16.3 Compute & Containers
+### 17.3 Compute & Containers
 
 | Need | Answer |
-|---|---|
+| --- | --- |
 | Decision ladder | VM → App Service → Functions → ACA → AKS → ACI → Batch |
 | VM SLA ladder | 99.9% single → 99.95% avail. set → 99.99% zones |
 | Cheap interruptible | Spot · Steady 24/7 → reservations · Flexible commit → savings plan |
@@ -1129,10 +1682,10 @@ az monitor scheduled-query create -g rg-mon -n alert-5xx \
 | Full K8s control | AKS (private cluster, workload identity, GitOps) |
 | APIM tiers | Consumption (serverless) · Premium (VNet, multi-region, zones, self-hosted GW) · v2 = faster + VNet integration |
 
-### 16.4 Networking
+### 17.4 Networking
 
 | Need | Answer |
-|---|---|
+| --- | --- |
 | LB decision | L4 regional: LB · L7 regional+WAF: App GW · L7 global HTTP: Front Door · DNS any-protocol: Traffic Manager |
 | Private PaaS | Private endpoint + private DNS zone (service endpoint = weaker, no on-prem) |
 | Topology | Hub-spoke (firewall, Bastion, gateways, DNS in hub); big scale → Virtual WAN |
@@ -1142,10 +1695,10 @@ az monitor scheduled-query create -g rg-mon -n alert-5xx \
 | Admin access | Bastion (no public IPs) · SNAT scale → NAT Gateway |
 | Hybrid DNS | DNS Private Resolver (conditional forwarding both ways) |
 
-### 16.5 BC/DR & Monitoring
+### 17.5 BC/DR & Monitoring
 
 | Need | Answer |
-|---|---|
+| --- | --- |
 | Definitions | RTO = downtime cap · RPO = data-loss cap |
 | Ladder | Zones (cheap, 99.99%) → multi-region (priority/active-active via FD/TM) |
 | VM regional DR, low RTO/RPO | ASR + recovery plans + test failovers |
@@ -1160,9 +1713,9 @@ az monitor scheduled-query create -g rg-mon -n alert-5xx \
 
 ---
 
-## 17. Practice Questions (Q&A)
+## 18. Practice Questions (Q&A)
 
-263 exam-style questions. Answers immediately follow each question.
+293 exam-style questions. Answers immediately follow each question.
 
 ### API Management
 
@@ -3401,7 +3954,310 @@ az monitor scheduled-query create -g rg-mon -n alert-5xx \
 
 > **Answer: B.** TCO Calculator compares total on-prem cost vs Azure; Pricing Calculator prices planned Azure architectures.
 
-**Q244. *(multi-select)* *[Hard]* CASE STUDY — FinSecure bank requires: no standing admin access, MFA on activation, quarterly access certification, and full audit of privileged actions. Which THREE features do you combine?**
+
+### API Management
+
+**Q244. Your rate-limit-by-key policy uses counter-key="constant". What behavior results?**
+
+- A. Per-IP limits
+- B. All callers share one global bucket and starve each other
+- C. Policy is ignored
+- D. 429 for every call
+
+> **Answer: B.** The counter key defines the bucket; a constant means every caller shares it. Use expressions like context.Request.IpAddress or a JWT claim.
+
+**Q245. After importing an API, calls return 401 despite a valid Entra token. The validate-jwt audience is set to the CLIENT app ID. Fix?**
+
+- A. Extend token lifetime
+- B. Set audience to the API's identifier (aud claim of the token)
+- C. Remove issuer check
+- D. Use subscription keys instead
+
+> **Answer: B.** aud must match the API/resource the token was issued FOR, not the client that requested it — a classic misconfiguration.
+
+**Q246. A daemon requests scope=api://orders/Orders.Read with client_credentials and fails. Why?**
+
+- A. Secret expired
+- B. App-only flows must request the /.default scope; named scopes are for delegated flows
+- C. Wrong tenant
+- D. Roles missing in manifest
+
+> **Answer: B.** Client credentials uses api://orders/.default, which rolls up granted application permissions (app roles).
+
+
+### Service Bus
+
+**Q247. Processing takes 90 s but the queue lock duration is 30 s with no renewal. Result?**
+
+- A. Message dead-letters immediately
+- B. Message unlocks mid-processing and is redelivered — duplicates
+- C. Nothing, locks auto-extend
+- D. Namespace throttles
+
+> **Answer: B.** Expired locks redeliver messages; renew locks or extend duration, and make handlers idempotent.
+
+**Q248. A queue has TTL 5 minutes and dead-lettering-on-expiration disabled. Backlogged messages…**
+
+- A. Wait forever
+- B. Silently disappear when TTL expires
+- C. Move to DLQ
+- D. Throttle senders
+
+> **Answer: B.** Without dead-letter-on-expiration, expired messages are simply dropped — enable it so nothing vanishes unnoticed.
+
+**Q249. Sending to a session-enabled queue fails with 'session identifier missing'. Why?**
+
+- A. Queue is full
+- B. Session-enabled entities require every message to carry a SessionId
+- C. Wrong tier
+- D. AMQP disabled
+
+> **Answer: B.** Session queues enforce SessionId on send; receivers accept sessions rather than plain messages.
+
+
+### RBAC & Governance
+
+**Q250. A VM's managed identity gets 403 reading blobs despite a 'Reader' role on the storage account. Root cause?**
+
+- A. Token expired
+- B. Reader is control-plane only; data access needs Storage Blob Data Reader
+- C. Wrong region
+- D. Firewall
+
+> **Answer: B.** Control-plane Reader sees the resource's configuration, not blob contents — data-plane roles (DataActions) are required.
+
+**Q251. Your IMDS token request uses resource=https://management.azure.com/ but you call blob storage. Result?**
+
+- A. Works fine
+- B. 401/403 — audience mismatch; request https://storage.azure.com/
+- C. Slower calls
+- D. Token refresh loop
+
+> **Answer: B.** Tokens are audience-bound; the storage data plane rejects management-plane tokens.
+
+
+### Networking
+
+**Q252. After creating a private endpoint, a spoke VM still resolves the storage FQDN to a public IP. Least likely cause?**
+
+- A. Private DNS zone not linked to the VNet
+- B. Missing DNS zone group (no A record)
+- C. Custom DNS not forwarding to 168.63.129.16
+- D. NSG blocking port 443
+
+> **Answer: D.** NSGs affect connectivity, not name resolution. The other three are the classic private-endpoint DNS failure modes.
+
+**Q253. Spoke A cannot reach spoke B though both peer with the hub. Peering is healthy. What is missing?**
+
+- A. Global peering
+- B. UDRs sending spoke traffic to the hub firewall (peering is non-transitive)
+- C. More address space
+- D. Service endpoints
+
+> **Answer: B.** Transitivity must be built: route spoke↔spoke traffic through an NVA/firewall in the hub with UDRs (or use direct peering/VWAN).
+
+**Q254. In the hub-spoke SaaS design, why does Azure Policy deny public network access on PaaS resources when private endpoints already exist?**
+
+- A. Policy speeds up traffic
+- B. Defense in depth: architecture provides the path, policy prevents drift back to public exposure
+- C. Cheaper egress
+- D. DNS requires it
+
+> **Answer: B.** Governance enforces the architecture over time — someone will eventually click 'enable public access' without it.
+
+
+### Container Apps
+
+**Q255. Canary traffic weights are configured but 100% of traffic hits the old revision. Likely cause?**
+
+- A. KEDA missing
+- B. App is in single-revision mode — weights need multiple-revision mode
+- C. Ingress internal
+- D. Min replicas 0
+
+> **Answer: B.** Single revision mode always routes to the latest revision; traffic splitting requires multiple revision mode.
+
+**Q256. A KEDA Service Bus scale rule never scales the worker. Which is NOT a plausible cause?**
+
+- A. Wrong queue name in metadata
+- B. Invalid connection secret for the scaler
+- C. messageCount threshold never reached
+- D. Dapr not enabled
+
+> **Answer: D.** Dapr is unrelated to KEDA scale rules; the others are the usual suspects.
+
+
+### Auth & Identity
+
+**Q257. jwt.ms shows your token has scp=User.Read but your API checks roles. What happened?**
+
+- A. Token corrupt
+- B. You obtained a delegated token; the API expects app roles (application permissions)
+- C. Wrong signing key
+- D. Expired token
+
+> **Answer: B.** scp = delegated scopes (user flows); roles = app roles. Match the flow to what the API authorizes on.
+
+**Q258. Why are two cloud-only break-glass accounts excluded from Conditional Access?**
+
+- A. To save licenses
+- B. So a CA misconfiguration or MFA outage cannot lock every admin out of the tenant
+- C. They're service accounts
+- D. Compliance requires it
+
+> **Answer: B.** Emergency access accounts guarantee tenant access during CA/MFA failures — monitored and alerted on every use.
+
+**Q259. FinSecure chose password hash sync over ADFS mainly because…**
+
+- A. It's more configurable
+- B. Cloud auth keeps working during on-prem outages with near-zero infrastructure
+- C. It avoids licenses
+- D. ADFS is deprecated
+
+> **Answer: B.** PHS is the simplest, most resilient hybrid identity option — federation adds servers, certificates, and failure modes.
+
+
+### Data Storage
+
+**Q260. ShopSphere keeps EU order data on EU SQL servers and pairs failover groups within the same geography because…**
+
+- A. Latency only
+- B. GDPR data residency must survive DR — failing over to a US region would violate it
+- C. Cost
+- D. SQL requires it
+
+> **Answer: B.** Residency by architecture: DR topology must respect the same data-boundary constraints as production.
+
+**Q261. Which Cosmos consistency did the e-commerce scenario choose for carts, and why?**
+
+- A. Strong — money involved
+- B. Session — shoppers see their own cart instantly without global write latency
+- C. Eventual — fastest
+- D. Bounded — compliance
+
+> **Answer: B.** Session gives read-your-own-writes for each user at low latency — carts don't need global strong consistency.
+
+
+### Business Continuity
+
+**Q262. ForgeWorks runs Region B as a scaled-down warm standby instead of cold IaC rebuild because…**
+
+- A. IaC is unreliable
+- B. 15-minute RTO can't wait for full provisioning; warm standby scales out in minutes
+- C. Cheaper than cold
+- D. Zones require it
+
+> **Answer: B.** Standby temperature follows RTO: cold = hours (cheapest), warm = minutes, hot/active = seconds (priciest).
+
+**Q263. Why does ransomware defeat replication-only DR strategies?**
+
+- A. It disables ASR
+- B. Replication faithfully copies the encrypted/corrupted data; only point-in-time immutable backups recover
+- C. It attacks backups first
+- D. It doesn't
+
+> **Answer: B.** Replication has no memory; backup provides history. Immutability + MUA protect that history from tampering.
+
+**Q264. Azure SQL PITR restores go to…**
+
+- A. The same database in place
+- B. A new database — the app must cut over or you swap names
+- C. A file share
+- D. The paired region only
+
+> **Answer: B.** PITR creates a new database on the same server; plan the rename/cutover step in your runbook and measure its time.
+
+**Q265. Soft delete was enabled the day AFTER a blob was deleted. Can it be recovered?**
+
+- A. Yes, always
+- B. No — protection features only cover events after they're enabled
+- C. Only with GRS
+- D. Only via support
+
+> **Answer: B.** Enable soft delete/versioning/immutability BEFORE you need them; retention must also exceed detection time.
+
+
+### Monitoring
+
+**Q266. An SRE must trace one failed order across APIM → ACA API → Service Bus → worker. Fastest tool?**
+
+- A. Activity log
+- B. App Insights end-to-end transaction view (operation ID correlation)
+- C. Metrics explorer
+- D. NSG flow logs
+
+> **Answer: B.** Distributed tracing correlates every hop under one operation ID — the Application Map/transaction view shows the failing link.
+
+
+### Design Patterns
+
+**Q267. In the GitOps AKS design, rollback of a bad deployment is performed by…**
+
+- A. kubectl apply of old YAML from a laptop
+- B. Reverting the Git commit — Flux reconciles the cluster to the previous state
+- C. Restoring etcd
+- D. Restarting nodes
+
+> **Answer: B.** Git is the source of truth; the revert is audited, repeatable, and automatic.
+
+**Q268. Why does the deployment stack's denyWriteAndDelete matter in the IaC lab?**
+
+- A. Faster deploys
+- B. Blocks out-of-band portal edits so prod can't drift from the template
+- C. Saves cost
+- D. Enables what-if
+
+> **Answer: B.** Deny settings enforce that changes flow through the pipeline — drift prevention, not just detection.
+
+**Q269. The retailer taints its Spot node pool so only batch workloads schedule there because…**
+
+- A. Spot is faster
+- B. Spot VMs can be evicted anytime; latency-critical pods must not land on them
+- C. Licensing
+- D. GPU drivers
+
+> **Answer: B.** Taints/tolerations keep interruptible capacity for interruptible work — cost optimization without risking SLOs.
+
+
+### AZ-305 Exam
+
+**Q270. 'Minimize administrative effort' for hybrid sign-in with cloud resilience. Best fit:**
+
+- A. ADFS farm
+- B. Password hash sync
+- C. Pass-through auth + 3 agents
+- D. Certificate federation
+
+> **Answer: B.** PHS = no extra servers and works during on-prem outages — the 'minimize effort' phrasing points straight to it.
+
+**Q271. A case study says spoke-per-customer with central egress inspection. Which two limits should the architect plan for first?**
+
+- A. VM quotas
+- B. IP address plan (supernet) and firewall SNAT/peering scale limits
+- C. Storage IOPS
+- D. DNS TTLs
+
+> **Answer: B.** Hub-spoke at 50+ spokes hits addressing and hub-throughput/SNAT limits before anything else — plan the /16 on day one.
+
+**Q272. Which statement about test failovers is the exam-correct posture?**
+
+- A. Optional if SLAs are high
+- B. Run regularly into isolated networks; an untested DR plan doesn't count as a plan
+- C. Only after incidents
+- D. Production failovers monthly
+
+> **Answer: B.** ASR test failovers validate RTO without touching production — auditors and the exam both expect scheduled drills.
+
+**Q273. An architect must justify APIM Premium over Standard v2 in a design review. Which requirement clinches it?**
+
+- A. JWT validation
+- B. Multi-region active gateways with internal VNet injection
+- C. Rate limiting
+- D. OpenAPI import
+
+> **Answer: B.** Features common to all tiers never justify Premium; multi-region + VNet injection are Premium differentiators.
+
+**Q274. CASE STUDY — FinSecure bank requires: no standing admin access, MFA on activation, quarterly access certification, and full audit of privileged actions. Which THREE features do you combine?**
 
 - A. PIM eligible assignments with MFA on activation
 - B. PIM access reviews
@@ -3409,21 +4265,21 @@ az monitor scheduled-query create -g rg-mon -n alert-5xx \
 - D. Resource locks
 - E. Azure Policy deny effect
 
-> **Answer: A, B, C.** PIM eligibility+MFA kills standing access, access reviews give certification, audit logs provide the trail. Locks and Policy govern resources, not privileged identity.
+> **Answers: A, B, C.** PIM eligibility+MFA kills standing access, access reviews give certification, audit logs provide the trail. Locks and Policy govern resources, not privileged identity.
 
-**Q245. *(multi-select)* *[Hard]* CASE STUDY — ShopSphere must keep EU customer PII in the EU while serving a global app, with regional failover that stays EU-compliant. Which TWO design choices are correct?**
+**Q275. CASE STUDY — ShopSphere must keep EU customer PII in the EU while serving a global app, with regional failover that stays EU-compliant. Which TWO design choices are correct?**
 
 - A. Azure SQL in West Europe with failover group to North Europe
 - B. Cosmos DB with write regions in East US and West Europe for PII
 - C. Store PII pseudonymized references only in non-EU regions
 - D. Enable RA-GRS from West Europe to East US for the PII database
 
-> **Answer: A, C.** WEU→NEU keeps both replicas in the EU; non-EU regions hold only pseudonymized references. Replicating PII to US regions (options B/D) violates residency.
+> **Answers: A, C.** WEU→NEU keeps both replicas in the EU; non-EU regions hold only pseudonymized references. Replicating PII to US regions (options B/D) violates residency.
 
 
 ### Networking
 
-**Q246. *(multi-select)* *[Medium]* Which THREE are required for a working private endpoint to Azure SQL from on-premises via ExpressRoute?**
+**Q276. Which THREE are required for a working private endpoint to Azure SQL from on-premises via ExpressRoute?**
 
 - A. Private endpoint in a VNet subnet
 - B. Private DNS zone privatelink.database.windows.net with correct records reachable from on-prem resolvers
@@ -3431,12 +4287,12 @@ az monitor scheduled-query create -g rg-mon -n alert-5xx \
 - D. Service endpoint on the gateway subnet
 - E. Public firewall allow rule for the on-prem NAT IP
 
-> **Answer: A, B, C.** PE + DNS resolution to the private IP + private-peering routing are the triad. Service endpoints don't work from on-prem; public firewall rules defeat the purpose.
+> **Answers: A, B, C.** PE + DNS resolution to the private IP + private-peering routing are the triad. Service endpoints don't work from on-prem; public firewall rules defeat the purpose.
 
 
 ### Auth & Identity
 
-**Q247. *(multi-select)* *[Medium]* An API validates incoming JWTs. Which FOUR checks are mandatory before trusting the token?**
+**Q277. An API validates incoming JWTs. Which FOUR checks are mandatory before trusting the token?**
 
 - A. Signature against the issuer's published keys (JWKS)
 - B. Issuer (iss) claim
@@ -3444,36 +4300,36 @@ az monitor scheduled-query create -g rg-mon -n alert-5xx \
 - D. Expiry (exp/nbf)
 - E. Token length > 500 characters
 
-> **Answer: A, B, C, D.** Signature, issuer, audience, and time validity are the core validation set; token length is meaningless.
+> **Answers: A, B, C, D.** Signature, issuer, audience, and time validity are the core validation set; token length is meaningless.
 
 
 ### Business Continuity
 
-**Q248. *(multi-select)* *[Medium]* Which TWO protect backups against ransomware actors with stolen admin credentials?**
+**Q278. Which TWO protect backups against ransomware actors with stolen admin credentials?**
 
 - A. Immutable vault
 - B. Multi-user authorization for destructive operations
 - C. GRS redundancy
 - D. Longer retention
 
-> **Answer: A, B.** Immutability blocks tampering; MUA requires a second identity to approve destructive changes. GRS/retention don't stop malicious deletion attempts.
+> **Answers: A, B.** Immutability blocks tampering; MUA requires a second identity to approve destructive changes. GRS/retention don't stop malicious deletion attempts.
 
 
 ### Data Storage
 
-**Q249. *(multi-select)* *[Medium]* Which TWO Cosmos DB choices best fit an unpredictable, low-average, spiky workload with occasional bursts?**
+**Q279. Which TWO Cosmos DB choices best fit an unpredictable, low-average, spiky workload with occasional bursts?**
 
 - A. Serverless capacity mode
 - B. Autoscale provisioned throughput
 - C. Standard (manual) provisioned at peak
 - D. Strong consistency to smooth load
 
-> **Answer: A, B.** Serverless (low/spiky) or autoscale (variable but sustained) both avoid paying peak 24/7. Manual-at-peak wastes money; consistency isn't a capacity lever.
+> **Answers: A, B.** Serverless (low/spiky) or autoscale (variable but sustained) both avoid paying peak 24/7. Manual-at-peak wastes money; consistency isn't a capacity lever.
 
 
 ### API Management
 
-**Q250. *(multi-select)* *[Medium]* Which THREE belong in an enterprise APIM security baseline for a public API?**
+**Q280. Which THREE belong in an enterprise APIM security baseline for a public API?**
 
 - A. validate-jwt (or validate-azure-ad-token) at the gateway
 - B. WAF (Front Door/App GW) in front of APIM
@@ -3481,90 +4337,90 @@ az monitor scheduled-query create -g rg-mon -n alert-5xx \
 - D. Rely on subscription keys as sole authentication
 - E. Expose backends publicly for redundancy
 
-> **Answer: A, B, C.** Token validation + WAF edge + secured backend channel. Subscription keys alone aren't authentication; public backends bypass the gateway.
+> **Answers: A, B, C.** Token validation + WAF edge + secured backend channel. Subscription keys alone aren't authentication; public backends bypass the gateway.
 
 
 ### AZ-305 Exam
 
-**Q251. *(ordering)* *[Hard]* Arrange the CAF migration journey in the correct order:**
+**Q281. Arrange the CAF migration journey in the correct order:**
 
 - A. Strategy — define business justification
 - B. Plan — inventory and skill planning
 - C. Ready — build landing zones
-- D. Govern & Manage — ongoing operations
-- E. Adopt — migrate and innovate
+- D. Adopt — migrate and innovate
+- E. Govern & Manage — ongoing operations
 
-> **Answer: A → B → C → E → D.** CAF: Strategy → Plan → Ready → Adopt, with Govern and Manage as continuing disciplines.
+> **Answer: the steps are listed above in the correct order (A→E).** CAF: Strategy → Plan → Ready → Adopt, with Govern and Manage as continuing disciplines.
 
 
 ### Business Continuity
 
-**Q252. *(ordering)* *[Medium]* Arrange the regional failover runbook for the ForgeWorks MES (SQL MI failover group + ASR + Traffic Manager):**
+**Q282. Arrange the regional failover runbook for the ForgeWorks MES (SQL MI failover group + ASR + Traffic Manager):**
 
-- A. Verify app health probes in the secondary region
+- A. Confirm regional outage via Service Health and monitoring
 - B. Fail over the SQL MI auto-failover group to the secondary
 - C. Execute the ASR recovery plan to boot app VMs in order
-- D. Confirm regional outage via Service Health and monitoring
+- D. Verify app health probes in the secondary region
 - E. Switch Traffic Manager/Front Door priority to the secondary
 
-> **Answer: D → B → C → A → E.** Verify the disaster first, bring data tier up, then compute, validate, then shift traffic — shifting traffic before the stack is healthy causes a second outage.
+> **Answer: the steps are listed above in the correct order (A→E).** Verify the disaster first, bring data tier up, then compute, validate, then shift traffic — shifting traffic before the stack is healthy causes a second outage.
 
 
 ### Auth & Identity
 
-**Q253. *(ordering)* *[Medium]* Arrange the OAuth 2.0 authorization code + PKCE flow:**
+**Q283. Arrange the OAuth 2.0 authorization code + PKCE flow:**
 
-- A. Entra returns an authorization code to the redirect URI
-- B. Client generates code_verifier and code_challenge
-- C. User authenticates at Entra ID authorize endpoint (challenge sent)
+- A. Client generates code_verifier and code_challenge
+- B. User authenticates at Entra ID authorize endpoint (challenge sent)
+- C. Entra returns an authorization code to the redirect URI
 - D. Client exchanges code + code_verifier at the token endpoint
 - E. Client calls the API with the access token
 
-> **Answer: B → C → A → D → E.** PKCE binds the code exchange to the verifier, preventing code interception attacks.
+> **Answer: the steps are listed above in the correct order (A→E).** PKCE binds the code exchange to the verifier, preventing code interception attacks.
 
 
 ### Networking
 
-**Q254. *(ordering)* *[Medium]* Arrange the packet path for an internet user reaching an internal-VNet APIM-fronted API:**
+**Q284. Arrange the packet path for an internet user reaching an internal-VNet APIM-fronted API:**
 
 - A. User resolves the app domain to Front Door anycast edge
-- B. APIM forwards to the Container Apps internal ingress
-- C. Front Door applies WAF rules and routes to origin via Private Link
-- D. Container app calls the data tier over private endpoints
-- E. Internal APIM gateway validates JWT and applies policies
+- B. Front Door applies WAF rules and routes to origin via Private Link
+- C. Internal APIM gateway validates JWT and applies policies
+- D. APIM forwards to the Container Apps internal ingress
+- E. Container app calls the data tier over private endpoints
 
-> **Answer: A → C → E → B → D.** Edge → WAF → gateway policies → private backend → private data — every hop private after the edge.
+> **Answer: the steps are listed above in the correct order (A→E).** Edge → WAF → gateway policies → private backend → private data — every hop private after the edge.
 
 
 ### Migration & Integration
 
-**Q255. *(ordering)* *[Medium]* Arrange an online (minimal-downtime) SQL Server → SQL MI migration:**
+**Q285. Arrange an online (minimal-downtime) SQL Server → SQL MI migration:**
 
-- A. Provision SQL Managed Instance and networking
-- B. Cutover: stop writes, complete sync, repoint connection strings
-- C. Validate data and performance on the target
-- D. Start DMS online migration (continuous sync)
-- E. Run Data Migration Assistant compatibility assessment
+- A. Run Data Migration Assistant compatibility assessment
+- B. Provision SQL Managed Instance and networking
+- C. Start DMS online migration (continuous sync)
+- D. Validate data and performance on the target
+- E. Cutover: stop writes, complete sync, repoint connection strings
 
-> **Answer: E → A → D → C → B.** Assess → provision → sync → validate → brief cutover window. Offline mode would move the downtime to the full copy phase.
+> **Answer: the steps are listed above in the correct order (A→E).** Assess → provision → sync → validate → brief cutover window. Offline mode would move the downtime to the full copy phase.
 
 
 ### Design Patterns
 
-**Q256. *(ordering)* *[Hard]* Arrange the GitOps deployment flow for RetailRocket's AKS platform:**
+**Q286. Arrange the GitOps deployment flow for RetailRocket's AKS platform:**
 
 - A. Developer merges code PR; GitHub Actions builds and scans the image
-- B. Canary weights shift traffic; burn-rate alerts gate promotion or rollback
-- C. Pipeline pushes the signed image to ACR
-- D. Pipeline opens a PR updating the image tag in the GitOps config repo
-- E. Flux detects the merged config change and reconciles the cluster
+- B. Pipeline pushes the signed image to ACR
+- C. Pipeline opens a PR updating the image tag in the GitOps config repo
+- D. Flux detects the merged config change and reconciles the cluster
+- E. Canary weights shift traffic; burn-rate alerts gate promotion or rollback
 
-> **Answer: A → C → D → E → B.** CI produces artifacts; CD is a Git merge that Flux pulls — pipelines never hold cluster credentials.
+> **Answer: the steps are listed above in the correct order (A→E).** CI produces artifacts; CD is a Git merge that Flux pulls — pipelines never hold cluster credentials.
 
 
 ### AZ-305 Exam
 
-**Q257. *[Hard]* CASE STUDY — 'Minimize administrative effort' + 'apps must not change connection strings after regional DB failover' + 'automatic failover'. Recommend:**
+**Q287. CASE STUDY — 'Minimize administrative effort' + 'apps must not change connection strings after regional DB failover' + 'automatic failover'. Recommend:**
 
 - A. Active geo-replication with manual DNS updates
 - B. Auto-failover groups with grace period
@@ -3573,7 +4429,7 @@ az monitor scheduled-query create -g rg-mon -n alert-5xx \
 
 > **Answer: B.** Failover groups: automatic policy + listener endpoints = zero app changes, minimal admin effort — every qualifier satisfied.
 
-**Q258. *[Hard]* CASE STUDY — A workload needs 99.99% compute SLA in ONE region at the LOWEST cost. Recommend:**
+**Q288. CASE STUDY — A workload needs 99.99% compute SLA in ONE region at the LOWEST cost. Recommend:**
 
 - A. Two VMs in an availability set
 - B. VMs spread across availability zones behind a Standard LB
@@ -3585,7 +4441,7 @@ az monitor scheduled-query create -g rg-mon -n alert-5xx \
 
 ### Monitoring
 
-**Q259. *[Medium]* CASE STUDY — CloudNest tenants must view only their own spoke's logs; the SOC needs estate-wide correlation. Cheapest compliant design:**
+**Q289. CASE STUDY — CloudNest tenants must view only their own spoke's logs; the SOC needs estate-wide correlation. Cheapest compliant design:**
 
 - A. 50 workspaces + 1 SOC workspace with cross-workspace queries
 - B. One central workspace: resource-context RBAC for tenants, Sentinel for SOC
@@ -3597,7 +4453,7 @@ az monitor scheduled-query create -g rg-mon -n alert-5xx \
 
 ### Data Storage
 
-**Q260. *[Hard]* CALCULATE — A read-heavy Cosmos container needs 8,000 RU/s at peak (4 h/day) and 800 RU/s otherwise. Which throughput model is cheapest?**
+**Q290. CALCULATE — A read-heavy Cosmos container needs 8,000 RU/s at peak (4 h/day) and 800 RU/s otherwise. Which throughput model is cheapest?**
 
 - A. Standard provisioned 8,000 RU/s
 - B. Autoscale with max 8,000 RU/s (scales 800–8,000)
@@ -3609,7 +4465,7 @@ az monitor scheduled-query create -g rg-mon -n alert-5xx \
 
 ### AZ-305 Exam
 
-**Q261. *[Medium]* CALCULATE — App Gateway (99.95%) → 2 zone-redundant web VMs (99.99%) → SQL zone-redundant (99.99%). Approximate composite SLA:**
+**Q291. CALCULATE — App Gateway (99.95%) → 2 zone-redundant web VMs (99.99%) → SQL zone-redundant (99.99%). Approximate composite SLA:**
 
 - A. 99.99%
 - B. 99.93%
@@ -3621,7 +4477,7 @@ az monitor scheduled-query create -g rg-mon -n alert-5xx \
 
 ### Container Apps
 
-**Q262. *[Medium]* TROUBLESHOOT — An ACA app with minReplicas=0 shows 8-second first-request latency each morning. Cheapest fix preserving off-hours savings:**
+**Q292. TROUBLESHOOT — An ACA app with minReplicas=0 shows 8-second first-request latency each morning. Cheapest fix preserving off-hours savings:**
 
 - A. minReplicas=1 always
 - B. Scheduled scale rule (cron) warming one replica during business hours
@@ -3633,7 +4489,7 @@ az monitor scheduled-query create -g rg-mon -n alert-5xx \
 
 ### Service Bus
 
-**Q263. *[Hard]* TROUBLESHOOT — Orders are processed twice occasionally under load. Consumers take ~90 s per message; lock duration is 60 s. Best fix:**
+**Q293. TROUBLESHOOT — Orders are processed twice occasionally under load. Consumers take ~90 s per message; lock duration is 60 s. Best fix:**
 
 - A. Switch to receive-and-delete
 - B. Renew locks (or raise lock duration) AND make handlers idempotent
@@ -3645,9 +4501,9 @@ az monitor scheduled-query create -g rg-mon -n alert-5xx \
 
 ---
 
-## 18. Flashcards
+## 19. Flashcards
 
-219 flashcards — cover the right column and recall.
+273 flashcards — cover the right column and recall.
 
 ### API Management
 
@@ -3987,3 +4843,112 @@ az monitor scheduled-query create -g rg-mon -n alert-5xx \
 | **Deployment stacks** | Manage deployments as units: deny settings block out-of-band edits; deleted-from-template resources cleaned up. Blueprints successor. |
 | **Pipeline auth best practice** | OIDC workload identity federation from GitHub Actions/Azure DevOps — zero stored cloud secrets. |
 | **Pre-production validation services** | Azure Load Testing (JMeter/Locust at scale) + Chaos Studio (fault injection) wired into CI/CD gates. |
+
+### API Management
+
+| Prompt | Answer |
+|---|---|
+| **🧒 APIM in plain words** | A hotel front desk: guests never enter the kitchen (backends). The desk checks keys (auth), enforces house rules (rate limits), answers from memory (cache), and forwards requests to the right department (routing). |
+| **🧒 Rate limit vs quota, simply** | Speed limit (right now) vs monthly fuel allowance (long term). You can obey one and still violate the other. |
+| **🧒 Versions vs revisions, simply** | New book edition (readers choose it; story changes) vs a reprint fixing typos (silently replaces stock; nothing breaks). |
+| **Config: per-caller throttling key** | rate-limit-by-key with counter-key=@(context.Request.IpAddress) or a JWT claim — a constant key makes every caller share one bucket. |
+
+### Service Bus
+
+| Prompt | Answer |
+|---|---|
+| **🧒 Queue in plain words** | A deli ticket machine: any free clerk serves the next ticket; nobody is served twice; a rush just makes the line longer (load leveling). |
+| **🧒 Topic in plain words** | A magazine subscription list: print once, every subscriber gets a copy, some only take the sports edition (filters). |
+| **🧒 DLQ in plain words** | The post office's undeliverable-mail shelf: after failed attempts, the letter waits with a note saying why, for a human to investigate. |
+| **🧒 Claim-check in plain words** | A coat check: pass the small ticket (blob reference) around the party, not the winter coat (huge payload). |
+| **🧒 Event vs message, simply** | Doorbell (fact happened, react if you care) vs courier package (payload the sender expects processed, signature required). |
+| **Config: lock duration vs processing time** | If processing exceeds the lock, the message redelivers mid-work → duplicates. Renew locks or extend duration; always code idempotent handlers. |
+| **Config: TTL + dead-letter-on-expiration** | TTL expiry with the flag off silently DELETES messages; with it on, they land in the DLQ where monitoring can catch them. |
+
+### RBAC & Governance
+
+| Prompt | Answer |
+|---|---|
+| **🧒 RBAC in plain words** | Office keycards: who you are (principal) + which doors open (role) + which floors (scope). Cards go to teams (groups), not individuals. |
+| **🧒 PIM in plain words** | The master-key sign-out sheet: borrow with a reason, manager approves, auto-return in 4 hours, every borrow logged. |
+| **🧒 Managed identity in plain words** | A badge issued by the building itself — the app never carries a password, so there's nothing to steal or leak to GitHub. |
+| **Config: control vs data plane 403** | 'Reader' on a storage account ≠ reading blobs. Data access needs DataActions roles like Storage Blob Data Reader, scoped as low as the container. |
+| **Config: IMDS token request** | curl 169.254.169.254/metadata/identity/oauth2/token?resource=https://storage.azure.com/ — the resource/audience must match the service you call. |
+
+### Networking
+
+| Prompt | Answer |
+|---|---|
+| **🧒 Private endpoint in plain words** | A private elevator installed straight into your office: the public lobby is bricked over, and the building directory (private DNS) routes visitors to your floor. |
+| **🧒 Hub-spoke in plain words** | An airport hub: every regional flight connects through it, where security (firewall), customs (gateways), and the control tower (DNS/monitoring) live once. |
+| **🧒 ER vs VPN, simply** | A private rail line vs an armored truck on the public highway — both safe, but the rail line never touches public roads and carries far more freight. |
+| **🧒 LB family in plain words** | Front Door = global concierge. App Gateway = building receptionist with metal detector (WAF). Load Balancer = elevator dispatcher. Traffic Manager = phone directory (DNS). |
+| **Config: private endpoint DNS trio** | (1) privatelink zone exists, (2) zone linked to the consuming VNet, (3) DNS zone group creates the A record. Custom DNS must forward to 168.63.129.16. |
+| **Config: spoke↔spoke traffic** | Peering is non-transitive — add UDRs (0.0.0.0/0 or spoke CIDRs → hub firewall) to route between spokes through the hub. |
+
+### Container Apps
+
+| Prompt | Answer |
+|---|---|
+| **🧒 Scale to zero in plain words** | Motion-sensor lights: dark (free) until someone walks in, with a half-second flicker (cold start) as they switch on. |
+| **🧒 Canary revisions in plain words** | Test the new recipe on 10% of tables; complaints → old recipe returns instantly; praise → roll it out to every table. |
+| **🧒 KEDA in plain words** | Open supermarket checkouts because six people are queuing (queue depth), not because the clock says 5 pm. |
+| **Config: traffic split prerequisites** | revisions-mode multiple + ingress traffic set --revision-weight A=90 B=10; single-revision mode ignores weights. |
+| **Config: Service Bus scale rule** | scale-rule-type azure-servicebus with queueName/namespace/messageCount metadata + connection auth secret; min-replicas 0 enables scale-to-zero. |
+
+### Auth & Identity
+
+| Prompt | Answer |
+|---|---|
+| **🧒 AuthN vs AuthZ, simply** | Airport ID check (who you are) vs boarding pass (what you may do: this flight, this seat). Both checks, in that order. |
+| **🧒 Access token in plain words** | A valet key: starts the car but not the trunk (limited scopes), expires soon, and you never hand over your real key (password). |
+| **🧒 Zero trust in plain words** | A nightclub where every door has a bouncer: front-door entry opens nothing else; wristbands match what you paid for; cameras assume someone snuck in. |
+| **🧒 Key Vault in plain words** | Hotel safe with a logbook: valuables out from under mattresses (config files), every opening logged, can't discard the safe while full (purge protection). |
+| **Config: app-only token request** | client_credentials + scope=api://your-api/.default (rolls up app roles). Named scopes in that flow fail — they're for delegated auth. |
+| **Config: break-glass accounts** | Two cloud-only accounts excluded from Conditional Access, long random passwords, alert on every sign-in — insurance against CA/MFA lockout. |
+
+### Data Storage
+
+| Prompt | Answer |
+|---|---|
+| **🧒 Storage redundancy in plain words** | Photo backups: one shoebox (LRS), three rooms (ZRS), a copy mailed to grandma — slightly delayed (GRS), rooms AND grandma (GZRS). |
+| **🧒 Blob tiers in plain words** | Closet (Hot) → attic (Cool) → storage unit (Cold) → bank vault: cheap but retrieval needs an appointment (Archive rehydration). |
+| **🧒 Cosmos consistency in plain words** | Group chat: Strong = nobody sees a message until everyone can. Session = you always see your own instantly (default). Eventual = all arrive, maybe out of order. |
+| **🧒 Partition key in plain words** | Filing cabinets: file orders by customer and lookups fly; file everything under '2026' and one drawer jams (hot partition) while others sit empty. |
+
+### Business Continuity
+
+| Prompt | Answer |
+|---|---|
+| **🧒 RTO/RPO in plain words** | 'How long until the shop reopens?' (RTO) vs 'how many receipts did we lose?' (RPO). Price both fears separately. |
+| **🧒 Backup vs replication, simply** | Mirror vs photo album: the mirror instantly shows the ketchup stain too (corruption); the album lets you return to before the spill. |
+| **🧒 Composite SLA in plain words** | Christmas lights: serial = every extra bulb can kill the string (multiply, availability drops). Parallel = two strings side by side (availability jumps). |
+| **Standby temperature ladder** | Cold (rebuild from IaC, hours, cheapest) → warm (scaled-down, minutes) → hot/active-active (seconds, priciest). RTO picks the rung. |
+| **Config: SQL PITR restore** | az sql db restore creates a NEW database at the chosen time — plan the cutover/rename step and rehearse it; that time is your real RTO. |
+| **Config: protection before disaster** | Soft delete, versioning, immutability only cover events AFTER enablement, and retention must exceed detection time (found on day 9 > 7-day retention = gone). |
+
+### Monitoring
+
+| Prompt | Answer |
+|---|---|
+| **🧒 Metrics vs logs, simply** | Car dashboard (instant, cheap, alarms) vs trip journal (rich history for later questions — KQL). |
+| **🧒 Distributed tracing in plain words** | A barcode that follows one package end-to-end: scan one order ID and see every warehouse, truck, and doorstep it touched. |
+| **🧒 Policy vs RBAC, simply** | Door keys (who may build) vs building codes (what anyone may build). Codes stop wooden shacks even for landowners. |
+
+### Design Patterns
+
+| Prompt | Answer |
+|---|---|
+| **🧒 GitOps in plain words** | The cluster reads its recipe book (Git) and cooks accordingly; fix the book, not the kitchen — rollback = revert the page, and the book's margin notes are your audit log. |
+| **Scenario: FinSecure identity stack** | PHS (resilient, zero infra) + Conditional Access baseline + PIM JIT + break-glass + policy-carrying management groups. License P2 only for admins. |
+| **Scenario: ShopSphere data residency** | EU data on EU SQL servers, failover groups paired within the geography — DR that respects GDPR by architecture, not paperwork. |
+| **Scenario: ForgeWorks recovery stack** | Zones for common failures; warm standby region for disasters; ASR for legacy VMs; failover groups for SQL; immutable GRS backups for ransomware; quarterly drills. |
+| **Scenario: CloudGate isolation** | Spoke-per-customer Bicep stamps, all egress via hub Firewall Premium, private endpoints + policy deny on public access, central logs with resource-context RBAC. |
+| **Scenario: RetailRun supply chain** | OIDC federation (CI) + workload identity (pods) + private ACR with scanning + approved-registry policy + Flux GitOps = zero stored secrets, full provenance. |
+
+### AZ-305 Exam
+
+| Prompt | Answer |
+|---|---|
+| **Lab habit that wins the exam** | After every hands-on step ask: which requirement (cost, RTO, isolation, least privilege) did this flag serve? AZ-305 tests the why, not the syntax. |
+| **Wording traps decoder** | 'Minimize cost' → cheapest compliant. 'Minimize admin effort' → most managed/PaaS. 'Most secure' → private + MI + JIT. 'Minimize changes' → lift-and-shift options. |

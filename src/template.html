@@ -94,6 +94,13 @@ button.btn:disabled{opacity:.45;cursor:not-allowed}
 .kb.know{background:color-mix(in srgb,var(--good) 18%,var(--panel));color:var(--good);border-color:var(--good)}
 .kb.dontknow{background:color-mix(in srgb,var(--bad) 14%,var(--panel));color:var(--bad);border-color:var(--bad)}
 .fcstats{text-align:center;color:var(--muted);font-size:.85rem;margin-top:10px}
+/* INLINE QUICK CHECK */
+.inlinequiz{background:var(--panel2);border:1px dashed var(--accent);border-radius:12px;padding:16px 18px;margin:14px 0}
+.inlinequiz .iq{margin:14px 0;padding-top:10px;border-top:1px solid var(--border)}
+.inlinequiz .iq:first-of-type{border-top:none;padding-top:0}
+.inlinequiz .iqq{font-weight:600;margin-bottom:8px}
+.inlinequiz .opt{background:var(--panel)}
+.inlinequiz .iqscore{margin-top:14px;font-weight:700;color:var(--accent)}
 footer{border-top:1px solid var(--border);color:var(--muted);text-align:center;padding:24px;font-size:.85rem}
 @media(max-width:900px){.studywrap{grid-template-columns:1fr}aside#toc{position:static;max-height:none}}
 </style>
@@ -376,6 +383,40 @@ document.addEventListener("keydown",e=>{
   if(e.key==="ArrowLeft"){ci=(ci-1+deck.length)%deck.length;showCard()}
 });
 buildDeck(true);
+
+/* ---------- INLINE QUICK CHECKS (after each topic) ---------- */
+document.querySelectorAll(".inlinequiz").forEach(div=>{
+  const cats=div.dataset.cat.split(",");
+  const pool=QUIZ.filter(q=>cats.includes(q.c)&&(!q.t||q.t==="single"));
+  if(!pool.length)return;
+  const start=()=>{
+    const qs=shuffle(pool).slice(0,5);
+    let score=0,done=0;
+    div.innerHTML=qs.map((q,qi)=>{
+      const opts=shuffle(q.o.map((t,i)=>({t,ok:i===q.a})));
+      return `<div class="iq" data-qi="${qi}"><div class="iqq">${qi+1}. ${q.q}</div>`+
+        opts.map((o,i)=>`<button class="opt" data-ok="${o.ok?1:0}">${String.fromCharCode(65+i)}. ${o.t}</button>`).join("")+
+        `<div class="explain"></div></div>`;
+    }).join("")+`<div class="iqscore"></div><button class="btn" style="margin-top:10px" id="iqAgain_${Math.random().toString(36).slice(2)}">↻ New questions</button>`;
+    qs.forEach((q,qi)=>{
+      const box=div.querySelector(`.iq[data-qi="${qi}"]`);
+      const btns=[...box.querySelectorAll(".opt")];
+      btns.forEach(b=>b.addEventListener("click",()=>{
+        btns.forEach(x=>{x.disabled=true;if(x.dataset.ok==="1")x.classList.add("correct")});
+        const right=b.dataset.ok==="1";
+        if(right)score++;else b.classList.add("wrong");
+        const ex=box.querySelector(".explain");
+        ex.innerHTML=(right?"✅ ":"❌ ")+q.e;
+        ex.style.display="block";
+        done++;
+        if(done===qs.length)div.querySelector(".iqscore").textContent=`Quick check score: ${score} / ${qs.length}${score===qs.length?" — perfect! 🎉":score>=Math.ceil(qs.length*0.7)?" — solid, review the misses.":" — reread this section, then retry."}`;
+      }));
+    });
+    div.querySelector("button[id^=iqAgain]").addEventListener("click",start);
+  };
+  div.innerHTML=`<strong>📝 Quick check:</strong> 5 random exam-style questions on this topic (${pool.length} in pool). <button class="btn primary" style="margin-left:8px">Start</button>`;
+  div.querySelector("button").addEventListener("click",start);
+});
 </script>
 </body>
 </html>

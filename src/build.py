@@ -6,12 +6,40 @@ import markdown
 D = "/sessions/upbeat-practical-goldberg/mnt/outputs/src"
 OUT = "/sessions/upbeat-practical-goldberg/mnt/outputs"
 
+CATNAMES_ORDER = {"APIM":"API Management","ServiceBus":"Service Bus","RBAC":"RBAC & Governance",
+    "Networking":"Networking","ContainerApps":"Container Apps","Auth":"Auth & Identity",
+    "Patterns,Exam":"Architecture & Exam","Data":"Data Storage","BCDR":"Business Continuity",
+    "Monitor":"Monitoring","Compute":"Compute","Migration":"Migration & Integration",
+    "Auth,RBAC,Patterns":"Key Vault, Hybrid & IaC"}
+
 # 1. Assemble markdown study guide
 md_parts = []
 for p in ["md_part1.md", "md_part2.md", "md_part3.md", "md_part4.md", "md_part5.md",
           "md_part6.md", "md_part7.md", "md_part8.md", "md_part9.md", "md_part10.md"]:
     md_parts.append(open(os.path.join(D, p), encoding="utf-8").read())
 md_body = "\n".join(md_parts)
+
+# 1b. Inject per-topic extras (quick check + whiteboards + resources) at end of each section
+import re as _re
+extras_raw = ""
+for p in ["extras_a.md", "extras_b.md"]:
+    extras_raw += open(os.path.join(D, p), encoding="utf-8").read() + "\n"
+blocks = _re.split(r"%%SECTION (\d+)\|([^%]+)%%", extras_raw)
+# blocks: ['', n, cats, content, n, cats, content, ...]
+extras = {}
+for i in range(1, len(blocks), 3):
+    n, cats, content = blocks[i], blocks[i+1].strip(), blocks[i+2]
+    quick = (f'\n### 📝 Quick Check — {CATNAMES_ORDER.get(cats, "exam concepts")}\n\n'
+             f'<div class="inlinequiz" data-cat="{cats}">Interactive quick check available in the web app. '
+             f'Full Q&A with explanations: see the Practice Questions appendix.</div>\n')
+    extras[int(n)] = quick + content
+for n in sorted(extras, reverse=True):
+    m = _re.search(rf"^## {n}\. .*$", md_body, _re.M)
+    assert m, f"section {n} heading not found"
+    nxt = _re.search(rf"^## {n+1}\. ", md_body[m.end():], _re.M)
+    ins = m.end() + (nxt.start() if nxt else len(md_body) - m.end())
+    md_body = md_body[:ins] + extras[n] + "\n" + md_body[ins:]
+print("Injected extras into sections:", sorted(extras))
 
 # Load quiz + cards
 quiz = []
